@@ -1,29 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <sys/wait.h>
-#include <time.h>
-#include <stdbool.h>
-
-typedef struct { 
-    char name[16]; 
-    unsigned int score;
-    unsigned int invalid_move;
-    unsigned int valid_move;
-    unsigned short pos_x, pos_y;
-    pid_t pid;
-    bool blocked;
-}player;
-
-typedef struct {
-    unsigned short width;
-    unsigned short height;
-    unsigned int player_count;
-    player players[9];
-    bool active_game;
-}gameParams;
+#include "game.h"
 
 gameParams params = {
     .width=10,
@@ -33,9 +8,9 @@ gameParams params = {
 };
 
 char * view = NULL;
-unsigned int delay;
-unsigned int timeout;           //????????
-unsigned int seed;
+unsigned int delay=200;
+unsigned int timeout=10;
+unsigned int seed = 1;
 
 static void initial_player(player* p, char* name){
     p->blocked = false;
@@ -84,9 +59,71 @@ int passParams(int argc, char *argv[]){
     return 0;
 }
 
+int createShm (const char * shm_name, size_t size){
+        // Crear memoria compartida
+    int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+    if (fd == -1) {
+        perror("shm_open");
+        exit(EXIT_FAILURE);
+    }
+
+    // Ajustar tamaño
+    if (ftruncate(fd, size) == -1) {
+        perror("ftruncate");
+        exit(EXIT_FAILURE);
+    }
+
+    return fd;
+}
+
+void closeShm(const char * shm_name, size_t size, void * ptr){
+    // Liberar
+    munmap(ptr, size);
+    shm_unlink(SHM_GAME_STATE_NAME);
+}
+
+void createGameState (int fd){
+
+    // Mapear
+    gameParams *state = mmap(NULL, sizeof(gameParams), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (state == MAP_FAILED) {
+        perror("mmap");
+        exit(EXIT_FAILURE);
+    }
+
+    close(fd);
+
+    // Inicializar estructura
+    state->width = 10;
+    state->height = 10;
+    state->player_count = 0;
+    state->active_game = true;
+
+    for (int i = 0; i < 9; i++) {
+        memset(state->players[i].name, 0, sizeof(state->players[i].name));
+        state->players[i].score = 0;
+        state->players[i].invalid_move = 0;
+        state->players[i].valid_move = 0;
+        state->players[i].pos_x = 0;
+        state->players[i].pos_y = 0;
+        state->players[i].pid = 0;
+        state->players[i].blocked = false;
+    }
+
+    //printf("Memoria compartida '%s' creada (%zu bytes).\n", SHM_GAME_STATE_NAME, SIZE);
+
+    //return 0;
+}
+
+
+
+
 
 int main(int argc, char *argv[]) {
+    int fd = createShm(SHM_GAME_STATE_NAME, sizeof(gameParams));
+    createGameState(fd);
     passParams(argc, argv);
+    //createGameState();
 
     // Si seed sigue siendo 1, usamos time(NULL) como valor por defecto
     seed = (seed == 1) ? (unsigned int)time(NULL) : seed;
