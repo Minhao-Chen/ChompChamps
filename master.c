@@ -5,16 +5,26 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <stdbool.h>
 
+typedef struct { 
+    char name[16]; 
+    unsigned int score;
+    unsigned int invalid_move;
+    unsigned int valid_move;
+    unsigned short pos_x, pos_y;
+    pid_t pid;
+    bool blocked;
+}player;
 
-typedef struct masterParam{
+typedef struct {
     unsigned int width;
     unsigned int height;
     unsigned int delay;
     unsigned int timeout;
     unsigned int seed;
     char *view;
-    char *players[9];
+    player players[9];
     int player_count;
 }masterParam;
 
@@ -28,6 +38,16 @@ masterParam params = {
     .player_count=0
 };
 
+static void initial_player(player* p, char* name){
+    p->blocked = false;
+    p->invalid_move = 0;
+    p->valid_move = 0;
+    p->score = 0;
+    strncpy(p->name, name, sizeof(p->name) - 1);
+    p->name[sizeof(p->name) - 1] = '\0';
+    p->pos_x = rand() % params.width;
+    p->pos_y = rand() % params.height;
+}
 
 int passParams(int argc, char *argv[]){
     if (argc < 2) {
@@ -52,7 +72,7 @@ int passParams(int argc, char *argv[]){
             params.view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
             while (i + 1 < argc && argv[i + 1][0] != '-' && params.player_count < 9) {
-                params.players[params.player_count++] = argv[++i];
+                initial_player(&params.players[params.player_count++],argv[++i]);
             }
         }
     }
@@ -80,75 +100,47 @@ int main(int argc, char *argv[]) {
     printf("seed: %u\n", params.seed);
     printf("view: %s\n", params.view ? params.view : "-");
     printf("num_players: %d\n", params.player_count);
-    for (int i = 0; i < params.player_count; i++)
-        printf("  %s\n", params.players[i]);
+    for (int i = 0; i < params.player_count; i++){
+        printf("  %s\n", params.players[i].name);
+    }
 
-    return 0;
-
-
-    /*pid_t pid;
+    int pipes[params.player_count][2];
     int status;
-    //int pipefd[2];
-    //pipe(pipefd);
-        //sleep(5);
-        pid = fork();
+    
+    for (int i = 0; i < params.player_count; i++) {
+        pipe(pipes[i]);
+        pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
             exit(1);
         }
-
         if (pid == 0) {
-                // Código del hijo: reemplazar proceso por el ejecutable hijo
-                char *args[] = {"../producer-consumer/false", NULL};
-                execve(args[0], args, NULL);
-            // Si execve falla:
-            perror("execve");
+            // jugador
+            close(pipes[i][0]);
+            dup2(pipes[i][1], 1);
+            execl("./player", "jugador", NULL);
+            perror("execl jugador");
             exit(1);
-        }
-
-        // El padre sigue aquí: crea otro hijo en la siguiente iteración
-
-    // Esperar a que todos los hijos terminen
-        pid_t wpid = waitpid(pid, &status, 0);
-        if (WEXITSTATUS(status)==0){
-            printf("Padre: hijo %d terminó de forma exitosa\n", wpid);
-            return 0;
-        }
-        if (wpid > 0) {
-            if (WIFEXITED(status)) {
-                printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
-            } else {
-                printf("Padre: hijo %d terminó de forma anormal\n", wpid);
+        } else {
+            // master
+            close(pipes[i][1]);
+            params.players[i].pid = pid;
+            printf("Jugador %d pid=%d name=%s\n", i, pid, params.players[i].name);
+            pid_t wpid = waitpid(pid, &status, 0);
+            // if (WEXITSTATUS(status)==0){
+            //     printf("Padre: hijo %d terminó de forma exitosa\n", wpid);
+            //     return 0;
+            // }
+            if (wpid > 0) {
+                if (WIFEXITED(status)) {
+                    printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
+                } else {
+                    printf("Padre: hijo %d terminó de forma anormal\n", wpid);
+                }
             }
         }
-
-    pid = fork();
-        if (pid < 0) {
-            perror("fork");
-            exit(1);
-        }
-
-        if (pid == 0) {
-                // Código del hijo: reemplazar proceso por el ejecutable hijo
-                char *args[] = {"../producer-consumer/true", NULL};
-                execve(args[0], args, NULL);
-            // Si execve falla:
-            perror("execve");
-            exit(1);
-        }
-
-        // El padre sigue aquí: crea otro hijo en la siguiente iteración
-
-    // Esperar a que todos los hijos terminen
-        wpid = waitpid(pid, &status, 0);
-        if (wpid > 0) {
-            if (WIFEXITED(status)) {
-                printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
-            } else {
-                printf("Padre: hijo %d terminó de forma anormal\n", wpid);
-            }
-        }
+    }
 
     printf("Padre: todos los hijos terminaron, fin del programa.\n");
-    return 0;*/
+    return 0;
 }
