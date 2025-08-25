@@ -18,25 +18,24 @@ typedef struct {
 }player;
 
 typedef struct {
-    unsigned int width;
-    unsigned int height;
-    unsigned int delay;
-    unsigned int timeout;
-    unsigned int seed;
-    char *view;
+    unsigned short width;
+    unsigned short height;
+    unsigned int player_count;
     player players[9];
-    int player_count;
-}masterParam;
+    bool active_game;
+}gameParams;
 
-masterParam params = {
+gameParams params = {
     .width=10,
     .height=10,
-    .delay=200,
-    .timeout=10,
-    .seed=1,
-    .view=NULL,
-    .player_count=0
+    .player_count=0,
+    .active_game=true
 };
+
+char * view = NULL;
+unsigned int delay;
+unsigned int timeout;           //????????
+unsigned int seed;
 
 static void initial_player(player* p, char* name){
     p->blocked = false;
@@ -63,13 +62,13 @@ int passParams(int argc, char *argv[]){
             params.height = atoi(argv[++i]);
             if (params.height < 10) params.height = 10;
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
-            params.delay = atoi(argv[++i]);
+            delay = atoi(argv[++i]);
         } else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
-            params.timeout = atoi(argv[++i]);
+            timeout = atoi(argv[++i]);
         } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
-            params.seed = (unsigned int)atoi(argv[++i]);
+            seed = (unsigned int)atoi(argv[++i]);
         } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
-            params.view = argv[++i];
+            view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
             while (i + 1 < argc && argv[i + 1][0] != '-' && params.player_count < 9) {
                 initial_player(&params.players[params.player_count++],argv[++i]);
@@ -90,15 +89,15 @@ int main(int argc, char *argv[]) {
     passParams(argc, argv);
 
     // Si seed sigue siendo 1, usamos time(NULL) como valor por defecto
-    params.seed = (params.seed == 1) ? (unsigned int)time(NULL) : params.seed;
+    seed = (seed == 1) ? (unsigned int)time(NULL) : seed;
 
     // Imprimir en el formato solicitado
     printf("width: %u\n", params.width);
     printf("height: %u\n", params.height);
-    printf("delay: %u\n", params.delay);
-    printf("timeout: %u\n", params.timeout);
-    printf("seed: %u\n", params.seed);
-    printf("view: %s\n", params.view ? params.view : "-");
+    printf("delay: %u\n", delay);
+    printf("timeout: %u\n", timeout);
+    printf("seed: %u\n", seed);
+    printf("view: %s\n", view ? view : "-");
     printf("num_players: %d\n", params.player_count);
     for (int i = 0; i < params.player_count; i++){
         printf("  %s\n", params.players[i].name);
