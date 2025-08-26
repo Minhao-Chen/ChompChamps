@@ -1,6 +1,12 @@
-#include "game.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <sys/mman.h>
+#include "common.h"
+#include "ipc_utils.h"
 
-gameParams params = {
+gameState params = {
     .width=10,
     .height=10,
     .player_count=0,
@@ -79,13 +85,13 @@ int createShm (const char * shm_name, size_t size){
 void closeShm(const char * shm_name, size_t size, void * ptr){
     // Liberar
     munmap(ptr, size);
-    shm_unlink(SHM_GAME_STATE_NAME);
+    shm_unlink(SHM_STATE);
 }
 
 void createGameState (int fd){
 
     // Mapear
-    gameParams *state = mmap(NULL, sizeof(gameParams), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    gameState *state = mmap(NULL, sizeof(gameState), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (state == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
@@ -120,7 +126,7 @@ void createGameState (int fd){
 
 
 int main(int argc, char *argv[]) {
-    int fd = createShm(SHM_GAME_STATE_NAME, sizeof(gameParams));
+    int fd = createShm(SHM_STATE, sizeof(gameState));
     createGameState(fd);
     passParams(argc, argv);
     //createGameState();
