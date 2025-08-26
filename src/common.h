@@ -32,9 +32,9 @@ typedef struct {
     sem_t sem_view_done; // Vista → Máster: imprimió
     sem_t sem_master_starvation; // Mutex para evitar inanición del máster
     sem_t sem_state_lock; // Mutex para el estado del juego
-    sem_t sem_count_lock; // Mutex para la variable F
+    sem_t sem_counter_lock; // Mutex para la variable F
     unsigned int reader_activated; // Cantidad de jugadores leyendo
-    sem_t sem_player[9]; // Semáforos por jugador
+    sem_t sem_players[9]; // Semáforos por jugador
 }synchronization;
 
 #endif

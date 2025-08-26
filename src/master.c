@@ -1,8 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <sys/mman.h>
 #include "common.h"
 #include "ipc_utils.h"
 

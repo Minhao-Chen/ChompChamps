@@ -10,7 +10,7 @@
 static int shm_state_fd = -1;
 static int shm_sync_fd = -1;
 
-gameState* creat_shm_state(int width, int height, int num_players){
+gameState* create_shm_state(int width, int height, int num_players){
     size_t gameState_size = get_state_size(width, height);
 
     shm_state_fd = shm_open(SHM_STATE, O_CREAT | O_RDWR, 0666);
@@ -76,15 +76,15 @@ synchronization* creat_shm_sync(int num_players){
         perror("sem_init state_lock");
         return NULL;
     }
-    if(sem_init(&sync->sem_count_lock, 1, 1) == -1) {
+    if(sem_init(&sync->sem_counter_lock, 1, 1) == -1) {
         perror("sem_init count_lock");
         return NULL;
     }
     for(int i = 0; i < num_players; i++){
-        if(sem_init(&sync->sem_player[i], 1, 1) == -1){
+        if(sem_init(&sync->sem_players[i], 1, 1) == -1){
             perror("sem_init player");
             for(int j = 0; j <i; j++){
-                sem_destroy(&sync->sem_player[j]);
+                sem_destroy(&sync->sem_players[j]);
             }
             return NULL;
         }
@@ -98,47 +98,62 @@ synchronization* creat_shm_sync(int num_players){
 int destroy_shm_state(gameState* state){
     int result = 0;
 
-    if (state != MAP_FAILED) {
-        if (munmap(state, get_state_size(state->width, state->height)) == -1) {
-            perror("munmap state");
+    if(shm_state_fd != -1){
+        if (state != MAP_FAILED) {
+            if (munmap(state, get_state_size(state->width, state->height)) == -1) {
+                perror("munmap state");
+                result = -1;
+            }
+        }
+            
+        if (close(shm_state_fd) == -1) {
+            perror("close state");
             result = -1;
         }
+            
+        if (shm_unlink(SHM_STATE) == -1) {
+            perror("shm_unlink state");
+            result = -1;
+        }
+
+        shm_state_fd = -1;
     }
-        
-    if (close(shm_state_fd) == -1) {
-        perror("close state");
-        result = -1;
-    }
-        
-    if (shm_unlink(SHM_STATE) == -1) {
-        perror("shm_unlink state");
-        result = -1;
-    }
-    
-    shm_state_fd = -1;
-    
     return result;
 }
 
-int destroy_shm_sync(synchronization* sync){
+int destroy_shm_sync(synchronization* sync, int num_players){
     int result = 0;
     if(shm_sync_fd != -1){
-        if(munmap(sync, sizeof(synchronization)) == -1){
-            perror("munmap sync");
+        if (sync != MAP_FAILED) {
+            for (int i = 0; i < num_players; i++) {
+                if (sem_destroy(&sync->sem_players[i]) == -1) {
+                perror("sem_destroy player");
+                result = -1;
+            }
+            }
+            sem_destroy(&sync->sem_view_notify);
+            sem_destroy(&sync->sem_view_done);
+            sem_destroy(&sync->sem_master_starvation);
+            sem_destroy(&sync->sem_state_lock);
+            sem_destroy(&sync->sem_counter_lock);
+        
+            if(munmap(sync, sizeof(synchronization)) == -1){
+                perror("munmap sync");
+                result = -1;
+            }
+        }
+    
+        if(close(shm_sync_fd) == -1){
+            perror("close sync");
+            result  = -1;
+        }
+        if(shm_unlink(SHM_SYNC) == -1){
+            perror("shm_unlink sync");
             result = -1;
         }
+        
+        shm_sync_fd = -1;
     }
-    if(close(shm_sync_fd) == -1){
-        perror("close sync");
-        result  = -1;
-    }
-    if(shm_unlink(SHM_SYNC) == -1){
-        perror("shm_unlink sync");
-        result = -1;
-    }
-    
-    shm_sync_fd = -1;
-    
     return result;
 }
 
@@ -155,32 +170,32 @@ void unlock_writer(synchronization* sync){
 
 void lock_reader(synchronization* sync){
     // Protocolo lector
-    sem_wait(&sync->sem_count_lock);      // E: Lock contador
+    sem_wait(&sync->sem_counter_lock);      // E: Lock contador
     sync->reader_activated++;                // F: Incrementar contador
     if (sync->reader_activated == 1) {
         sem_wait(&sync->sem_state_lock);    // D: Primer lector bloquea escritores
     }
-    sem_post(&sync->sem_count_lock);      // E: Liberar contador
+    sem_post(&sync->sem_counter_lock);      // E: Liberar contador
 }
 
 void unlock_reader(synchronization* sync){
-    sem_wait(&sync->sem_count_lock);      // E: Lock contador
+    sem_wait(&sync->sem_counter_lock);      // E: Lock contador
     sync->reader_activated--;                // F: Decrementar contador
     if (sync->reader_activated == 0) {
         sem_post(&sync->sem_state_lock);    // D: Último lector libera escritores
     }
-    sem_post(&sync->sem_count_lock);      // E: Liberar contador
+    sem_post(&sync->sem_counter_lock);      // E: Liberar contador
 }
 
 void player_wait_turn(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_wait(&sync->sem_player[player_id]);
+        sem_wait(&sync->sem_players[player_id]);
     }
 }
 
 void master_release_player(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_post(&sync->sem_player[player_id]);
+        sem_post(&sync->sem_players[player_id]);
     }
 }
 
