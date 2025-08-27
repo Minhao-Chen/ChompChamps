@@ -1,30 +1,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <sys/wait.h>
 #include "common.h"
 #include "ipc_utils.h"
+#include <time.h>
 
-gameState params = {
-    .width=10,
-    .height=10,
-    .player_count=0,
-    .active_game=true
-};
+#define DEFAULT_DELAY 200
+#define DEFAULT_TIMEOUT 10
+
+gameState * params;
 
 char * view = NULL;
-unsigned int delay=200;
-unsigned int timeout=10;
+unsigned int delay=DEFAULT_DELAY;
+unsigned int timeout=DEFAULT_TIMEOUT;
 unsigned int seed = 1;
 
-static void initial_player(player* p, char* name){
-    p->blocked = false;
+static void initial_player(player* p/*, char* name*/){
+    /*p->blocked = false;
     p->invalid_move = 0;
     p->valid_move = 0;
     p->score = 0;
     strncpy(p->name, name, sizeof(p->name) - 1);
     p->name[sizeof(p->name) - 1] = '\0';
-    p->pos_x = rand() % params.width;
-    p->pos_y = rand() % params.height;
+    p->pos_x = rand() % params->width;
+    p->pos_y = rand() % params->height;*/
+
+    memset(p->name, 0, sizeof(p->name));
+    p->score = 0;
+    p->invalid_move = 0;
+    p->valid_move = 0;
+    p->pos_x = rand() % params->width;
+    p->pos_y = rand() % params->height;
+    p->pid = 0;                         ///????????????????
+    p->blocked = false;
 }
 
 int passParams(int argc, char *argv[]){
@@ -35,11 +44,11 @@ int passParams(int argc, char *argv[]){
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-w") == 0 && i + 1 < argc) {
-            params.width = atoi(argv[++i]);
-            if (params.width < 10) params.width = 10;
+            params->width = atoi(argv[++i]);
+            if (params->width < 10) params->width = 10;
         } else if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
-            params.height = atoi(argv[++i]);
-            if (params.height < 10) params.height = 10;
+            params->height = atoi(argv[++i]);
+            if (params->height < 10) params->height = 10;
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             delay = atoi(argv[++i]);
         } else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
@@ -49,13 +58,14 @@ int passParams(int argc, char *argv[]){
         } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
             view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
-            while (i + 1 < argc && argv[i + 1][0] != '-' && params.player_count < 9) {
-                initial_player(&params.players[params.player_count++],argv[++i]);
+            while (i + 1 < argc && argv[i + 1][0] != '-' && params->player_count < 9) {
+                strncpy(params->players[params->player_count++].name, argv[++i], sizeof(argv[i]) - 1);
+                //initial_player(&params->players[params->player_count++],argv[++i]);
             }
         }
     }
 
-    if (params.player_count < 1) {
+    if (params->player_count < 1) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
     }
@@ -86,33 +96,39 @@ void closeShm(const char * shm_name, size_t size, void * ptr){
     shm_unlink(SHM_STATE);
 }
 
-void createGameState (int fd){
+void createGameState (/*int fd*/){
 
     // Mapear
-    gameState *state = mmap(NULL, sizeof(gameState), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    /*gameState *state = mmap(NULL, sizeof(gameState), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (state == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
     }
+    close(fd);    
+    */
 
-    close(fd);
+    //gameState * state = create_shm_state();
+
+    params = create_shm_state();;
 
     // Inicializar estructura
-    state->width = 10;
-    state->height = 10;
-    state->player_count = 0;
-    state->active_game = true;
+    params->width = DEFAULT_WIDTH;
+    params->height = DEFAULT_HEIGHT;
+    params->player_count = 0;
+    params->active_game = true;
 
     for (int i = 0; i < 9; i++) {
-        memset(state->players[i].name, 0, sizeof(state->players[i].name));
+        /*memset(state->players[i].name, 0, sizeof(state->players[i].name));
         state->players[i].score = 0;
         state->players[i].invalid_move = 0;
         state->players[i].valid_move = 0;
         state->players[i].pos_x = 0;
         state->players[i].pos_y = 0;
         state->players[i].pid = 0;
-        state->players[i].blocked = false;
+        state->players[i].blocked = false;*/
+        initial_player(&params->players[i]);
     }
+    
 
     //printf("Memoria compartida '%s' creada (%zu bytes).\n", SHM_GAME_STATE_NAME, SIZE);
 
@@ -124,8 +140,8 @@ void createGameState (int fd){
 
 
 int main(int argc, char *argv[]) {
-    int fd = createShm(SHM_STATE, sizeof(gameState));
-    createGameState(fd);
+    //int fd = createShm(SHM_STATE, sizeof(gameState));
+    createGameState(/*fd*/);
     passParams(argc, argv);
     //createGameState();
 
@@ -133,21 +149,21 @@ int main(int argc, char *argv[]) {
     seed = (seed == 1) ? (unsigned int)time(NULL) : seed;
 
     // Imprimir en el formato solicitado
-    printf("width: %u\n", params.width);
-    printf("height: %u\n", params.height);
+    printf("width: %u\n", params->width);
+    printf("height: %u\n", params->height);
     printf("delay: %u\n", delay);
     printf("timeout: %u\n", timeout);
     printf("seed: %u\n", seed);
     printf("view: %s\n", view ? view : "-");
-    printf("num_players: %d\n", params.player_count);
-    for (int i = 0; i < params.player_count; i++){
-        printf("  %s\n", params.players[i].name);
+    printf("num_players: %d\n", params->player_count);
+    for (int i = 0; i < params->player_count; i++){
+        printf("  %s\n", params->players[i].name);
     }
 
-    int pipes[params.player_count][2];
+    int pipes[params->player_count][2];
     int status;
     
-    for (int i = 0; i < params.player_count; i++) {
+    for (int i = 0; i < params->player_count; i++) {
         pipe(pipes[i]);
         pid_t pid = fork();
         if (pid < 0) {
@@ -164,8 +180,8 @@ int main(int argc, char *argv[]) {
         } else {
             // master
             close(pipes[i][1]);
-            params.players[i].pid = pid;
-            printf("Jugador %d pid=%d name=%s\n", i, pid, params.players[i].name);
+            params->players[i].pid = pid;
+            printf("Jugador %d pid=%d name=%s\n", i, pid, params->players[i].name);
             pid_t wpid = waitpid(pid, &status, 0);
             // if (WEXITSTATUS(status)==0){
             //     printf("Padre: hijo %d terminó de forma exitosa\n", wpid);

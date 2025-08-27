@@ -7,6 +7,10 @@
 
 #define SHM_STATE "/game_state"
 #define SHM_SYNC "/game_sync"
+#define DEFAULT_WIDTH 10
+#define DEFAULT_HEIGHT 10
+#define MAX_WIDTH  50
+#define MAX_HEIGHT 50
 
 typedef struct { 
     char name[16]; 

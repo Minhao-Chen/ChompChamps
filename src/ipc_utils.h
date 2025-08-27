@@ -5,10 +5,11 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <string.h>
 
 
 // Funciones que manejan las memorias compartidas
-gameState* create_shm_state(int width, int height, int num_players);
+gameState* create_shm_state(/*int width, int height, int num_players*/);
 synchronization* creat_shm_sync(int num_players);
 int destroy_shm_state();
 int destroy_shm_sync();
@@ -27,6 +28,6 @@ void view_notify_print(synchronization *sync);
 void master_notify_view(synchronization *sync);
 void master_wait_view(synchronization *sync);
 
-int get_state_size(int width, int height);
+int get_state_size(/*int width, int height*/);
 
 #endif

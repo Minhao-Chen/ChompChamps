@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <string.h>
 #include <unistd.h>
 
 
@@ -10,8 +9,8 @@
 static int shm_state_fd = -1;
 static int shm_sync_fd = -1;
 
-gameState* create_shm_state(int width, int height, int num_players){
-    size_t gameState_size = get_state_size(width, height);
+gameState* create_shm_state(/*int width, int height, int num_players*/){
+    size_t gameState_size = get_state_size(/*width, height*/);
 
     shm_state_fd = shm_open(SHM_STATE, O_CREAT | O_RDWR, 0666);
     if(shm_state_fd == -1){
@@ -32,10 +31,10 @@ gameState* create_shm_state(int width, int height, int num_players){
         return NULL;
     }
 
-    state->width = width;
-    state->height = height;
-    state->player_count = num_players;
-    state->active_game = true;
+    //state->width = width;
+    //state->height = height;
+    //state->player_count = num_players;
+    //state->active_game = true;
 
     return state;
 }
@@ -215,6 +214,6 @@ void master_wait_view(synchronization *sync){
     sem_wait(&sync->sem_view_done);
 }
 
-int get_state_size(int width, int height){
-    return sizeof(gameState) + (width * height * sizeof(int));
+int get_state_size(/*int width, int height*/){
+    return sizeof(gameState) /*+ (width * height * sizeof(int))*/;
 }
