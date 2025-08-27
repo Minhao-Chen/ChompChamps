@@ -32,10 +32,10 @@ static void init_board(GameBoard *board, int width, int height) {
     memset(board->render_buffer, 0, sizeof(board->render_buffer));
     memset(board->prev_buffer,   0, sizeof(board->prev_buffer));
 
-    // Llena con aleatorios
+    // Llena con aleatorios entre 1 y 9
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            board->cells[i][j] = rand() % 100;
+            board->cells[i][j] = (rand() % 9) + 1;
         }
     }
 }
@@ -73,7 +73,7 @@ static void render_full_buffer(GameBoard *board) {
     (void)write(STDOUT_FILENO, buf, (pos < BUFFER_SIZE) ? pos : BUFFER_SIZE);
 }
 
-// Configurar terminal para modo raw (sin buffering)
+/*// Configurar terminal para modo raw (sin buffering)
 void setup_terminal() {
     struct termios term;
     tcgetattr(STDIN_FILENO, &term);
@@ -86,7 +86,7 @@ void restore_terminal() {
     tcgetattr(STDIN_FILENO, &term);
     term.c_lflag |= (ICANON | ECHO);
     tcsetattr(STDIN_FILENO, TCSANOW, &term);
-}
+}*/
 
 // Simular cambios aleatorios en el tablero
 void update_board_random(GameBoard *board) {

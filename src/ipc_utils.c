@@ -9,8 +9,8 @@
 static int shm_state_fd = -1;
 static int shm_sync_fd = -1;
 
-gameState* create_shm_state(/*int width, int height, int num_players*/){
-    size_t gameState_size = get_state_size(/*width, height*/);
+gameState* create_shm_state(int width, int height/*, int num_players*/){
+    size_t gameState_size = get_state_size(width, height);
 
     shm_state_fd = shm_open(SHM_STATE, O_CREAT | O_RDWR, 0666);
     if(shm_state_fd == -1){
@@ -30,11 +30,6 @@ gameState* create_shm_state(/*int width, int height, int num_players*/){
         close(shm_state_fd);
         return NULL;
     }
-
-    //state->width = width;
-    //state->height = height;
-    //state->player_count = num_players;
-    //state->active_game = true;
 
     return state;
 }
@@ -94,6 +89,19 @@ synchronization* creat_shm_sync(int num_players){
     return sync;
 }
 
+synchronization* attach_shm_sync(void) {
+    int fd = shm_open(SHM_SYNC, O_RDWR, 0666); // sin O_CREAT??
+    if (fd == -1) { perror("shm_open sync attach"); return NULL; }
+
+    size_t sz = sizeof(synchronization);
+    synchronization *sync = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (sync == MAP_FAILED) { perror("mmap sync attach"); close(fd); return NULL; }
+    close(fd);
+
+    return sync; // ya podés usar sync->sem_* con sem_wait/sem_post
+}
+
+
 int destroy_shm_state(gameState* state){
     int result = 0;
 
@@ -130,11 +138,26 @@ int destroy_shm_sync(synchronization* sync, int num_players){
                 result = -1;
             }
             }
-            sem_destroy(&sync->sem_view_notify);
-            sem_destroy(&sync->sem_view_done);
-            sem_destroy(&sync->sem_master_starvation);
-            sem_destroy(&sync->sem_state_lock);
-            sem_destroy(&sync->sem_counter_lock);
+            if(sem_destroy(&sync->sem_view_notify) == -1){
+                perror("sem_destroy view_notify");
+                result = -1;
+            }
+            if(sem_destroy(&sync->sem_view_done)){
+                perror("sem_destroy view_done");
+                result = -1;
+            }
+            if(sem_destroy(&sync->sem_master_starvation)){
+                perror("sem_destroy master_starvation");
+                result = -1;
+            }
+            if(sem_destroy(&sync->sem_state_lock)){
+                perror("sem_destroy state_lock");
+                result = -1;
+            }
+            if(sem_destroy(&sync->sem_counter_lock)){
+                perror("sem_destroy counter_lock");
+                result = -1;
+            }
         
             if(munmap(sync, sizeof(synchronization)) == -1){
                 perror("munmap sync");
@@ -186,6 +209,8 @@ void unlock_reader(synchronization* sync){
     sem_post(&sync->sem_counter_lock);      // E: Liberar contador
 }
 
+
+
 void player_wait_turn(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
         sem_wait(&sync->sem_players[player_id]);
@@ -214,6 +239,6 @@ void master_wait_view(synchronization *sync){
     sem_wait(&sync->sem_view_done);
 }
 
-int get_state_size(/*int width, int height*/){
-    return sizeof(gameState) /*+ (width * height * sizeof(int))*/;
+int get_state_size(int width, int height){
+    return sizeof(gameState) + (width * height * sizeof(int));
 }
