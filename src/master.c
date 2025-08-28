@@ -69,53 +69,7 @@ void start_players(){
 
 }
 
-/* // Función para parsear parámetros
-void parse_arguments(int argc, char *argv[]) {
-    int opt;
-    while ((opt = getopt(argc, argv, "w:h:d:t:s:v:p:")) != -1) {
-        switch (opt) {
-            case 'w':
-                unsigned short width_aux=atoi(optarg);
-                if (width_aux > 10) state->width = width_aux;
-                break;
-            case 'h':
-                unsigned short height_aux=atoi(optarg);
-                if (height_aux > 10) state->height = height_aux;
-                break;
-            case 'd':
-                delay = atoi(optarg);
-                break;
-            case 't':
-                timeout = atoi(optarg);
-                break;
-            case 's':
-                seed = (unsigned int)atoi(optarg);
-                break;
-            case 'v':
-                view = optarg;
-                break;
-            case 'p':
-                // Procesar múltiples jugadores
-                while (optind < argc && argv[optind][0] != '-') {
-                    if (state->player_count < 9) {
-                        strncpy(state->players[state->player_count++].name, argv[optind], sizeof(argv[optind++]) - 1);
-                    } else {
-                        optind++;
-                    }
-                }
-                break;
-            default:
-                fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
 
-    if (state->player_count == 0) {
-        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
-        exit(EXIT_FAILURE);
-    }
-}
- */
 int parse_arguments(int argc, char *argv[]){
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
@@ -141,7 +95,8 @@ int parse_arguments(int argc, char *argv[]){
             while (i + 1 < argc && argv[i + 1][0] != '-' && state->player_count < 9) {
                 strncpy(state->players[state->player_count++].name, argv[++i], sizeof(state->players[0].name) - 1);
                 //state->players[state->player_count-1].name[sizeof(state->players[0].name) - 1] = '\0';
-                state->players[state->player_count-1].name[1]=0;
+                //printf("%s",  state->players[state->player_count-1].name);
+                //state->players[state->player_count-1].name[3]=0;
             }
         }
     }
@@ -215,7 +170,7 @@ int main(int argc, char *argv[]) {
     parse_arguments(argc, argv);
     //start_players();
     createGameState(/*fd*/);
-    createSync(state->player_count);
+    //createSync(state->player_count);
     //createGameState();
 
     // Imprimir en el formato solicitado
@@ -227,11 +182,19 @@ int main(int argc, char *argv[]) {
     printf("view: %s\n", view ? view : "-");
     printf("num_players: %d\n", state->player_count);
 
+   
+
+
     for (int i = 0; i < state->player_count; i++){
-        printf("ANTES DELHIZO EL FORK");
-        printf("  %s\n", state->players[i].name);
         
+       printf("%s a\n", state->players[i].name);
+  
+
     }
+    
+
+    printf("a");
+
     
     int status;
     char arg_w[16], arg_h[16], num_player[16]; // ver bien esto..., se pasan como strings...
@@ -287,15 +250,15 @@ int main(int argc, char *argv[]) {
 
     /// semaforos
     printf("ANTES DEL POST \n");
-    sem_post(&sems->sem_view_notify);
+   // sem_post(&sems->sem_view_notify);
     printf("DESPUES DEL POST \n");
-    sem_wait(&sems->sem_view_done);
-    printf("DESPPUES DEL WAIT 'n");
+    //sem_wait(&sems->sem_view_done);
+    printf("DESPPUES DEL WAIT \n");
     usleep(2000);
     ///
     state->board[10]=-2;
-    sem_post(&sems->sem_view_done);
-    sem_post(&sems->sem_view_notify);
+   // sem_post(&sems->sem_view_done);
+    //sem_post(&sems->sem_view_notify);
     //usleep(delay);
 
     /*
