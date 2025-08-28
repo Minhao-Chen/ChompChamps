@@ -9,7 +9,7 @@
 static int shm_state_fd = -1;
 static int shm_sync_fd = -1;
 
-gameState* create_shm_state(int width, int height/*, int num_players*/){
+gameState* create_shm_state(int width, int height){
     size_t gameState_size = get_state_size(width, height);
 
     shm_state_fd = shm_open(SHM_STATE, O_CREAT | O_RDWR, 0666);

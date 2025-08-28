@@ -6,7 +6,7 @@
 
 #define NMOVS 8
 
-gameState * params;
+gameState * state;
 synchronization * sync;
 
 int main(int argc, char *argv[]){
@@ -30,14 +30,14 @@ int main(int argc, char *argv[]){
     {-1, -1}  // Noroeste
     };
 
-    params = create_shm_state();
+    state = create_shm_state();
     sync = attach_shm_sync(); 
 
     int board[10][10]; // es como ejemplo esto, despues usar el board posta
 
     while(1){
         //ver bien lo de los semaforos
-        movement(width, height, &params->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
+        movement(width, height, &state->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
     }
 
     //no hace falta hacer open con los semaforos pq estan init

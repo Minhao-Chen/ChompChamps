@@ -11,11 +11,19 @@
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
 
-gameState * state;
+gameState state_default = {
+    .width = DEFAULT_WIDTH,
+    .height = DEFAULT_HEIGHT,
+    .player_count = 0,
+    .active_game = true
+};
+
+gameState * state = &state_default;
+synchronization * sems;
 
 char * view = NULL;
-unsigned int delay=DEFAULT_DELAY;
-unsigned int timeout=DEFAULT_TIMEOUT;
+unsigned int delay = DEFAULT_DELAY;
+unsigned int timeout = DEFAULT_TIMEOUT;
 unsigned int seed;
 
 static void initial_player(player* p, int num/*, char* name*/){
@@ -28,7 +36,7 @@ static void initial_player(player* p, int num/*, char* name*/){
     p->pos_x = rand() % state->width;
     p->pos_y = rand() % state->height;*/
 
-    memset(p->name, 0, sizeof(p->name));
+    //memset(p->name, 0, sizeof(p->name));
     p->score = 0;
     p->invalid_move = 0;
     p->valid_move = 0;
@@ -55,18 +63,18 @@ void start_players(){
 
 }
 
-// Función para parsear parámetros
+/* // Función para parsear parámetros
 void parse_arguments(int argc, char *argv[]) {
     int opt;
     while ((opt = getopt(argc, argv, "w:h:d:t:s:v:p:")) != -1) {
         switch (opt) {
             case 'w':
-                state->width = atoi(optarg);
-                if (state->width < 10) state->width = 10;
+                unsigned short width_aux=atoi(optarg);
+                if (width_aux > 10) state->width = width_aux;
                 break;
             case 'h':
-                state->height = atoi(optarg);
-                if (state->height < 10) state->height = 10;
+                unsigned short height_aux=atoi(optarg);
+                if (height_aux > 10) state->height = height_aux;
                 break;
             case 'd':
                 delay = atoi(optarg);
@@ -101,8 +109,8 @@ void parse_arguments(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 }
-
-/*int passstate(int argc, char *argv[]){
+ */
+int parse_arguments(int argc, char *argv[]){
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
@@ -125,8 +133,9 @@ void parse_arguments(int argc, char *argv[]) {
             view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
             while (i + 1 < argc && argv[i + 1][0] != '-' && state->player_count < 9) {
-                strncpy(state->players[state->player_count++].name, argv[++i], sizeof(argv[i]) - 1);
-                //initial_player(&state->players[state->player_count++],argv[++i]);
+                strncpy(state->players[state->player_count++].name, argv[++i], sizeof(state->players[0].name) - 1);
+                //state->players[state->player_count-1].name[sizeof(state->players[0].name) - 1] = '\0';
+                state->players[state->player_count-1].name[1]=0;
             }
         }
     }
@@ -137,9 +146,9 @@ void parse_arguments(int argc, char *argv[]) {
     }
 
     return 0;
-}*/
+}
 
-int createShm (const char * shm_name, size_t size){
+/* int createShm (const char * shm_name, size_t size){
         // Crear memoria compartida
     int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
     if (fd == -1) {
@@ -160,53 +169,35 @@ void closeShm(const char * shm_name, size_t size, void * ptr){
     // Liberar
     munmap(ptr, size);
     shm_unlink(SHM_STATE);
-}
+} */
 
 void createGameState (/*int fd*/){
-
-    // Mapear
-    /*gameState *state = mmap(NULL, sizeof(gameState), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (state == MAP_FAILED) {
-        perror("mmap");
-        exit(EXIT_FAILURE);
-    }
-    close(fd);    
-    */
-
-    //gameState * state = create_shm_state();
-
-    state = create_shm_state(MAX_WIDTH,MAX_HEIGHT);
+    gameState * shm_state = create_shm_state(state->width,state->height);
 
     // Inicializar estructura
-    state->width = DEFAULT_WIDTH;
-    state->height = DEFAULT_HEIGHT;
-    state->player_count = 0;
-    state->active_game = true;
-
-    /*
-    for (int i = 0; i < 9; i++) { 
-        /*memset(state->players[i].name, 0, sizeof(state->players[i].name));
-        state->players[i].score = 0;
-        state->players[i].invalid_move = 0;
-        state->players[i].valid_move = 0;
-        state->players[i].pos_x = 0;
-        state->players[i].pos_y = 0;
-        state->players[i].pid = 0;
-        state->players[i].blocked = false;
-        initial_player(&state->players[i], i);
+    shm_state->width = state->width;
+    shm_state->height = state->height;
+    shm_state->player_count = state->player_count;
+    for (int i = 0; i < shm_state->player_count; i++){
+        strncpy (shm_state->players[i].name, state->players[i].name, sizeof(state->players[0].name));      
     }
-    */
+    shm_state->active_game = true;
     
-
-    //printf("Memoria compartida '%s' creada (%zu bytes).\n", SHM_GAME_STATE_NAME, SIZE);
-
-    //return 0;
+    // Llena con aleatorios entre 1 y 9
+    for (int i = 0; i < shm_state->height; i++) {
+        for (int j = 0; j < shm_state->width; j++) {
+            shm_state->board[j+i*shm_state->width] = (rand() % 9) + 1;
+        }
+    }
+    state = shm_state;
+    start_players();
 }
 
 
-
-
-
+void createSync (int player_count){
+    sems = creat_shm_sync(player_count);
+    return;
+}
 
 
 int main(int argc, char *argv[]) {
@@ -215,9 +206,10 @@ int main(int argc, char *argv[]) {
     seed = (seed == 1) ? (unsigned int)time(NULL) : seed;
 
     //int fd = createShm(SHM_STATE, sizeof(gameState));
-    createGameState(/*fd*/);
     parse_arguments(argc, argv);
-    start_players();
+    //start_players();
+    createGameState(/*fd*/);
+    createSync(state->player_count);
     //createGameState();
 
     // Imprimir en el formato solicitado
@@ -228,13 +220,13 @@ int main(int argc, char *argv[]) {
     printf("seed: %u\n", seed);
     printf("view: %s\n", view ? view : "-");
     printf("num_players: %d\n", state->player_count);
+
     for (int i = 0; i < state->player_count; i++){
+        printf("ANTES DELHIZO EL FORK");
         printf("  %s\n", state->players[i].name);
+        
     }
-
-
-
-
+    
     int status;
     char arg_w[16], arg_h[16], num_player[16]; // ver bien esto..., se pasan como strings...
     sprintf(arg_w, "%d", state->width);
@@ -242,19 +234,25 @@ int main(int argc, char *argv[]) {
 
     //Crear la vista
     pid_t pid = fork();
+    
     if (pid < 0) {
         perror("fork");
         exit(1);
     }
     if (pid == 0) {
         // vista
-        execl("./view", arg_w, arg_h, NULL);
+        
+        execl("./view", "vista", arg_w, arg_h, NULL);
         perror("execl view");
         exit(1);
     }
+
+    
+    /*int N = state->player_count;
     int pipes[state->player_count][2]; // te abre pipe para cada jugador
+    int fds[N]; // solo los read-ends para el select
     for (int i = 0; i < state->player_count; i++) {
-        pipe(pipes[i]);
+        if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
         pid_t pid = fork();
         if (pid < 0) {
             perror("fork");
@@ -275,19 +273,32 @@ int main(int argc, char *argv[]) {
         } else {
             // master
             close(pipes[i][1]);
+            fds[i] = pipes[i][0];            // guardo el read-end para select
             state->players[i].pid = pid;
             printf("Jugador %d pid=%d name=%s\n", i, pid, state->players[i].name);
-            pid_t wpid = waitpid(pid, &status, 0);
-            if (wpid > 0) {
-                if (WIFEXITED(status)) {
-                    printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
-                } else {
-                    printf("Padre: hijo %d terminó de forma anormal\n", wpid);
-                }
-            }
         }
-    }
+    }*/
 
-    printf("Padre: todos los hijos terminaron, fin del programa.\n");
+    /// semaforos
+    printf("ANTES DEL POST");
+    sem_post(&sems->sem_view_notify);
+    printf("DESPUES DEL POST");
+    sem_wait(&sems->sem_view_done);
+    printf("DESPPUES DEL WAIT");
+    usleep(2000);
+    ///
+    state->board[10]=-2;
+    sem_post(&sems->sem_view_done);
+    sem_post(&sems->sem_view_notify);
+    //usleep(delay);
+
+    /*
+    // Esperar a que todos los hijos (jugadores más vista) terminen
+    int children = state->player_count + (view!=NULL ? 1 : 0);
+    for (int i = 0; i < children; i++) {
+        pid_t wpid = waitpid(-1, &status, 0);
+    }*/
+
+    //printf("Padre: todos los hijos terminaron, fin del programa.\n");
     return 0;
 }
