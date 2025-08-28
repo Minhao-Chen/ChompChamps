@@ -18,8 +18,14 @@ gameState state_default = {
     .active_game = true
 };
 
+synchronization sems_default = {
+    .reader_activated = 0
+};
+
+
+
 gameState * state = &state_default;
-synchronization * sems;
+synchronization * sems = &sems_default;
 
 char * view = NULL;
 unsigned int delay = DEFAULT_DELAY;
@@ -280,11 +286,11 @@ int main(int argc, char *argv[]) {
     }*/
 
     /// semaforos
-    printf("ANTES DEL POST");
+    printf("ANTES DEL POST \n");
     sem_post(&sems->sem_view_notify);
-    printf("DESPUES DEL POST");
+    printf("DESPUES DEL POST \n");
     sem_wait(&sems->sem_view_done);
-    printf("DESPPUES DEL WAIT");
+    printf("DESPPUES DEL WAIT 'n");
     usleep(2000);
     ///
     state->board[10]=-2;
