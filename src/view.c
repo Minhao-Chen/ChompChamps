@@ -11,7 +11,7 @@
 
 
 gameState * state;
-synchronization* sems;
+synchronization* sync;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
@@ -84,47 +84,34 @@ void update_board_random() {
 }
 
 int main(int argc, char *argv[]) {
-     printf("VIEW: hola!\n");
+    printf("VIEW: hola!\n");
     fflush(stdout); // para q se vea con el flush
-
-
 
     printf("VISTA");
     srand((unsigned)time(NULL));
-    int fd = shm_open(SHM_STATE, O_RDWR, 0666);
-    if (fd == -1) { perror("shm_open"); exit(1); }
 
-    state = mmap(NULL, sizeof(gameState) + (atoi(argv[0]) * atoi(argv[1]) * sizeof(int)),
-                             PROT_READ | PROT_WRITE,
-                             MAP_SHARED, fd, 0);
-    if (state == MAP_FAILED) { perror("mmap"); exit(1); }
+    state = connect_shm_state();
 
-    fd = shm_open(SHM_SYNC, O_RDWR, 0666);
-    if (fd == -1) { perror("shm_open"); exit(1); }
-
-    sems = mmap(NULL, sizeof(synchronization),
-                             PROT_READ,
-                             MAP_SHARED, fd, 0);
-    if (sems == MAP_FAILED) { perror("mmap"); exit(1); }
+    sync = connect_shm_sync();
 
 
     //while (state->active_game) {
         printf("ANTES DEL WAIT VISTA");
             fflush(stdout);  // para q se vea con el flush
 
-        sem_wait(&sems->sem_view_notify);
+        sem_wait(&sync->sem_view_notify);
         printf("\033[H\033[2J"); // limpiar
         render_board(state);
         render_players(state);
-        sem_post(&sems->sem_view_done);
+        sem_post(&sync->sem_view_done);
 
-        sem_wait(&sems->sem_view_notify);
+        sem_wait(&sync->sem_view_notify);
         printf("\033[H\033[2J"); // limpiar
         render_board(state);
         render_players(state);
-        sem_post(&sems->sem_view_done);
+        sem_post(&sync->sem_view_done);
         //sem_post()
-       // sem_post(&sems->sem_view_notify);
+       // sem_post(&sync->sem_view_notify);
     //}
 
     

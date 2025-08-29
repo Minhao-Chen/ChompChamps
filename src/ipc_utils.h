@@ -11,8 +11,8 @@
 // Funciones que manejan las memorias compartidas
 gameState* create_shm_state(int width, int height);
 synchronization* creat_shm_sync(int num_players);
-int destroy_shm_state();
-int destroy_shm_sync();
+int destroy_shm_state(gameState* state);
+int destroy_shm_sync(synchronization* sync, int num_players);
 gameState* connect_shm_state();
 synchronization* connect_shm_sync();
 int close_shm_state(gameState* state);
