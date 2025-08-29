@@ -3,11 +3,15 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include "common.h"
+#include "ipc_utils.h"
 
 #define NMOVS 8
 
-gameState * params;
+gameState * state;
 synchronization * sync;
+
+bool adentro(int w, int h, player * p, int x, int y);
+void movement(int w, int h, player * p, int movs[NMOVS][2], int board[10][10]);
 
 int main(int argc, char *argv[]){
      if (argc < 4) {
@@ -30,14 +34,14 @@ int main(int argc, char *argv[]){
     {-1, -1}  // Noroeste
     };
 
-    params = create_shm_state();
-    sync = attach_shm_sync(); 
+    state = connect_shm_state();
+    sync = connect_shm_sync(); 
 
     int board[10][10]; // es como ejemplo esto, despues usar el board posta
 
     while(1){
         //ver bien lo de los semaforos
-        movement(width, height, &params->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
+        movement(width, height, &state->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
     }
 
     //no hace falta hacer open con los semaforos pq estan init
