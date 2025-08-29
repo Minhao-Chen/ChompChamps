@@ -1,0 +1,27 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -std=c11 -pthread
+LDFLAGS = -lrt -lpthread
+
+SRC_DIR = src
+BIN_DIR = bin
+
+# Asegurar que el directorio bin existe
+$(BIN_DIR):
+	mkdir -p $(BIN_DIR)
+
+# Reglas con dependencia del directorio
+$(BIN_DIR)/master: $(SRC_DIR)/master.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(BIN_DIR)/vista: $(SRC_DIR)/view.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(BIN_DIR)/player: $(SRC_DIR)/player.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+all: $(BIN_DIR)/master $(BIN_DIR)/vista $(BIN_DIR)/player
+
+clean:
+	rm -rf $(BIN_DIR)
+
+.PHONY: all clean

@@ -30,7 +30,7 @@ gameState* create_shm_state(int width, int height){
         close(shm_state_fd);
         return NULL;
     }
-
+    
     return state;
 }
 
@@ -89,16 +89,99 @@ synchronization* creat_shm_sync(int num_players){
     return sync;
 }
 
-synchronization* attach_shm_sync(void) {
-    int fd = shm_open(SHM_SYNC, O_RDWR, 0666); // sin O_CREAT??
-    if (fd == -1) { perror("shm_open sync attach"); return NULL; }
+// Conectar a memoria compartida del estado (para vista y jugadores)
+gameState* connect_shm_state() {
+    // Abrir shared memory existente (sin O_CREAT)
+    shm_state_fd = shm_open(SHM_STATE, O_RDWR, 0666);
+    if (shm_state_fd == -1) {
+        perror("shm_open connect state");
+        return NULL;
+    }
+    
+    // Obtener tamaño del archivo para mapear
+    struct stat sb;
+    if (fstat(shm_state_fd, &sb) == -1) {
+        perror("fstat state");
+        close(shm_state_fd);
+        return NULL;
+    }
+    
+    // Mapear memoria
+    gameState* state = mmap(NULL, sb.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_state_fd, 0);
+    if (state == MAP_FAILED) {
+        perror("mmap connect state");
+        close(shm_state_fd);
+        return NULL;
+    }
+    
+    return state;
+}
 
-    size_t sz = sizeof(synchronization);
-    synchronization *sync = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (sync == MAP_FAILED) { perror("mmap sync attach"); close(fd); return NULL; }
-    close(fd);
+// Conectar a memoria compartida de sincronización (para vista y jugadores)
+synchronization* connect_shm_sync() {
+    // Abrir shared memory existente (sin O_CREAT)
+    shm_sync_fd = shm_open(SHM_SYNC, O_RDWR, 0666);
+    if (shm_sync_fd == -1) {
+        perror("shm_open connect sync");
+        return NULL;
+    }
+    
+    // Mapear memoria (tamaño fijo para sincronización)
+    synchronization* sync = mmap(NULL, sizeof(synchronization), PROT_READ | PROT_WRITE, 
+                                MAP_SHARED, shm_sync_fd, 0);
+    if (sync == MAP_FAILED) {
+        perror("mmap connect sync");
+        close(shm_sync_fd);
+        return NULL;
+    }
+    
+    return sync;
+}
 
-    return sync; // ya podés usar sync->sem_* con sem_wait/sem_post
+// Cerrar conexión a memoria de estado (sin destruir)
+int close_shm_state(gameState* state) {
+    int result = 0;
+    
+    if (state != MAP_FAILED) {
+        // Obtener tamaño para desmapear
+        size_t size = get_state_size(state->width, state->height);
+        if (munmap(state, size) == -1) {
+            perror("munmap close state");
+            result = -1;
+        }
+    }
+    
+    if (shm_state_fd != -1) {
+        if (close(shm_state_fd) == -1) {
+            perror("close state fd");
+            result = -1;
+        }
+        shm_state_fd = -1;
+    }
+    
+    return result;
+}
+
+// Cerrar conexión a memoria de sincronización (sin destruir)
+int close_shm_sync(synchronization* sync) {
+    int result = 0;
+    
+    if (sync != MAP_FAILED) {
+        if (munmap(sync, sizeof(synchronization)) == -1) {
+            perror("munmap close sync");
+            result = -1;
+        }
+    }
+    
+    if (shm_sync_fd != -1) {
+        if (close(shm_sync_fd) == -1) {
+            perror("close sync fd");
+            result = -1;
+        }
+        shm_sync_fd = -1;
+    }
+    
+    return result;
 }
 
 

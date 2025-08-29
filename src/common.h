@@ -9,7 +9,8 @@
 #define SHM_SYNC "/game_sync"
 #define DEFAULT_WIDTH 10
 #define DEFAULT_HEIGHT 10
-
+#define MAX_WIDTH  50
+#define MAX_HEIGHT 50
 
 typedef struct { 
     char name[16]; 
@@ -19,7 +20,7 @@ typedef struct {
     unsigned short pos_x, pos_y;
     pid_t pid;
     bool blocked;
-}player;
+} player;
 
 typedef struct {
     unsigned short width;
@@ -28,7 +29,7 @@ typedef struct {
     player players[9];
     bool active_game;
     int board[];
-}gameState;
+} gameState;
 
 typedef struct {
     sem_t sem_view_notify; // Máster → Vista: hay cambios
@@ -38,6 +39,17 @@ typedef struct {
     sem_t sem_counter_lock; // Mutex para la variable F
     unsigned int reader_activated; // Cantidad de jugadores leyendo
     sem_t sem_players[9]; // Semáforos por jugador
-}synchronization;
+} synchronization;
+
+typedef struct {
+    int width;
+    int height;
+    int delay_ms;
+    int timeout_sec;
+    unsigned int seed;
+    char *view_path;
+    char *player_names[9];
+    int num_players;
+ }Config;
 
 #endif

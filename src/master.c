@@ -5,72 +5,117 @@
 #include "common.h"
 #include "ipc_utils.h"
 #include <time.h>
-#include <bits/getopt_core.h>
 #include <getopt.h>
 
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
 
-gameState state_default = {
-    .width = DEFAULT_WIDTH,
-    .height = DEFAULT_HEIGHT,
-    .player_count = 0,
-    .active_game = true
-};
-
-synchronization sems_default = {
-    .reader_activated = 0
-};
-
-
-
-gameState * state = &state_default;
-synchronization * sems = &sems_default;
+gameState * state = NULL;
+synchronization * sync = NULL;
 
 char * view = NULL;
 unsigned int delay = DEFAULT_DELAY;
 unsigned int timeout = DEFAULT_TIMEOUT;
 unsigned int seed;
 
-static void initial_player(player* p, int num/*, char* name*/){
-    /*p->blocked = false;
-    p->invalid_move = 0;
-    p->valid_move = 0;
-    p->score = 0;
-    strncpy(p->name, name, sizeof(p->name) - 1);
-    p->name[sizeof(p->name) - 1] = '\0';
-    p->pos_x = rand() % state->width;
-    p->pos_y = rand() % state->height;*/
 
-    //memset(p->name, 0, sizeof(p->name));
-    p->score = 0;
-    p->invalid_move = 0;
-    p->valid_move = 0;
-    //hay q chequear q posiciones iniciales sean distintas...
-    p->pos_x = rand() % state->width; 
-    p->pos_y = rand() % state->height;
-    for(int i = 0; i <= num; i++){
-        if(i != num){
-            while(p->pos_x == state->players[i].pos_x && p->pos_y == state->players[i].pos_y){
-                p->pos_x = rand() % state->width; 
-                p->pos_y = rand() % state->height;
-            }
+static bool is_position_unique(int current_index) {
+    for (int i = 0; i < current_index; i++) {
+        if (state->players[i].pos_x == state->players[current_index].pos_x &&
+            state->players[i].pos_y == state->players[current_index].pos_y) {
+            return false;
         }
     }
-    p->pid = 0;                         ///????????????????
-    p->blocked = false;
+    return true;
 }
 
+static void start_players() {
+    for (int i = 0; i < state->player_count; i++) {
+        memset(state->players[i].name, 0, sizeof(state->players[i].name));
+        state->players[i].score = 0;
+        state->players[i].invalid_move = 0;
+        state->players[i].valid_move = 0;
+        
+        // Posiciones iniciales únicas
+        do {
+            state->players[i].pos_x = rand() % state->width;
+            state->players[i].pos_y = rand() % state->height;
+        } while (!is_position_unique(i));
+        
+        state->players[i].pid = 0;
+        state->players[i].blocked = false;
+    }
+}
 
-void start_players(){
-    for (int i = 0; i < state->player_count; i++) { 
-        initial_player(&state->players[i], i);
+// Función para parsear parámetros
+Config parse_arguments(int argc, char *argv[]) {
+    Config config = {
+        .width = DEFAULT_WIDTH,
+        .height = DEFAULT_HEIGHT,
+        .delay_ms = DEFAULT_DELAY,
+        .timeout_sec = DEFAULT_TIMEOUT,
+        .seed = 0,
+        .view_path = NULL,
+        .num_players = 0
+    };
+
+    for (int i = 0; i < 9; i++) {
+        config.player_names[i] = NULL;
     }
 
+    int opt;
+
+    while ((opt = getopt(argc, argv, "w:h:d:t:s:v:p:")) != -1) {
+        switch (opt) {
+            case 'w': {
+                int temp = atoi(optarg);
+                if (temp >= 10) config.width = temp;
+                break;
+            }
+            case 'h': {
+                int temp = atoi(optarg);
+                if (temp >= 10) config.height = temp;
+                break;
+            }
+            case 'd': {
+                config.delay_ms = atoi(optarg);
+                break;
+            }
+            case 't': {
+                config.timeout_sec = atoi(optarg);
+                break;
+            }
+            case 's': {
+                config.seed = (unsigned int)atoi(optarg);
+                break;
+            }
+            case 'v': {
+                config.view_path = optarg;
+                break;
+            }
+            case 'p': {
+                while (optind-1 < argc && argv[optind-1][0] != '-') {
+                    if (config.num_players < 9) {
+                        config.player_names[config.num_players++] = argv[optind-1];
+                    }
+                    optind++;
+                }
+                break;
+            }
+            default:
+                fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (config.num_players == 0) {
+        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
+        exit(EXIT_FAILURE);
+    }
+    return config;
 }
 
-
-int parse_arguments(int argc, char *argv[]){
+/* int parse_arguments(int argc, char *argv[]){
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
@@ -93,10 +138,8 @@ int parse_arguments(int argc, char *argv[]){
             view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
             while (i + 1 < argc && argv[i + 1][0] != '-' && state->player_count < 9) {
-                strncpy(state->players[state->player_count++].name, argv[++i], sizeof(state->players[0].name) - 1);
-                //state->players[state->player_count-1].name[sizeof(state->players[0].name) - 1] = '\0';
-                //printf("%s",  state->players[state->player_count-1].name);
-                //state->players[state->player_count-1].name[3]=0;
+                strncpy(state->players[state->player_count++].name, argv[++i], sizeof(argv[i]) - 1);
+                //initial_player(&state->players[state->player_count++],argv[++i]);
             }
         }
     }
@@ -107,71 +150,54 @@ int parse_arguments(int argc, char *argv[]){
     }
 
     return 0;
-}
-
-/* int createShm (const char * shm_name, size_t size){
-        // Crear memoria compartida
-    int fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
-    if (fd == -1) {
-        perror("shm_open");
-        exit(EXIT_FAILURE);
-    }
-
-    // Ajustar tamaño
-    if (ftruncate(fd, size) == -1) {
-        perror("ftruncate");
-        exit(EXIT_FAILURE);
-    }
-
-    return fd;
-}
-
-void closeShm(const char * shm_name, size_t size, void * ptr){
-    // Liberar
-    munmap(ptr, size);
-    shm_unlink(SHM_STATE);
 } */
 
-void createGameState (/*int fd*/){
-    gameState * shm_state = create_shm_state(state->width,state->height);
+
+void createGameState (Config config){
+
+    state = create_shm_state(config.width, config.height);
+
+    if (state == NULL) {
+        fprintf(stderr, "Error creando shared memory del estado\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Inicializar estructura
-    shm_state->width = state->width;
-    shm_state->height = state->height;
-    shm_state->player_count = state->player_count;
-    for (int i = 0; i < shm_state->player_count; i++){
-        strncpy (shm_state->players[i].name, state->players[i].name, sizeof(state->players[0].name));      
+    state->width = config.width;
+    state->height = config.height;
+    state->player_count = config.num_players;
+    state->active_game = true;
+    for (int i = 0; i < config.num_players; i++) {
+        strncpy(state->players[i].name, config.player_names[i], sizeof(state->players[i].name) - 1);
+        state->players[i].name[sizeof(state->players[i].name) - 1] = '\0';
     }
-    shm_state->active_game = true;
-    
+
     // Llena con aleatorios entre 1 y 9
-    for (int i = 0; i < shm_state->height; i++) {
-        for (int j = 0; j < shm_state->width; j++) {
-            shm_state->board[j+i*shm_state->width] = (rand() % 9) + 1;
+    for (int i = 0; i < state->height; i++) {
+        for (int j = 0; j < state->width; j++) {
+            state->board[j+i*state->width] = (rand() % 9) + 1;
         }
     }
-    state = shm_state;
     start_players();
 }
 
-
 void createSync (int player_count){
-    sems = creat_shm_sync(player_count);
-    return;
+    sync = creat_shm_sync(player_count);
+    if(sync == NULL){
+        fprintf(stderr, "Error creando shared memeory del semaforo");
+        exit(EXIT_FAILURE);
+    }
 }
-
 
 int main(int argc, char *argv[]) {
 
-    // Si seed sigue siendo 1, usamos time(NULL) como valor por defecto
-    seed = (seed == 1) ? (unsigned int)time(NULL) : seed;
+    Config config = parse_arguments(argc, argv);
 
-    //int fd = createShm(SHM_STATE, sizeof(gameState));
-    parse_arguments(argc, argv);
-    //start_players();
-    createGameState(/*fd*/);
-    //createSync(state->player_count);
-    //createGameState();
+    seed = (config.seed == 0) ? (unsigned int)time(NULL) : config.seed;
+    srand(seed);
+    
+    createGameState(config);
+    createSync(state->player_count);
 
     // Imprimir en el formato solicitado
     printf("width: %u\n", state->width);
@@ -182,20 +208,13 @@ int main(int argc, char *argv[]) {
     printf("view: %s\n", view ? view : "-");
     printf("num_players: %d\n", state->player_count);
 
-   
-
-
     for (int i = 0; i < state->player_count; i++){
+        printf("ANTES DELHIZO EL FORK");
+        printf("  %s\n", state->players[i].name);
         
-       printf("%s a\n", state->players[i].name);
-  
-
     }
-    
 
-    printf("a");
 
-    
     int status;
     char arg_w[16], arg_h[16], num_player[16]; // ver bien esto..., se pasan como strings...
     sprintf(arg_w, "%d", state->width);
@@ -203,14 +222,13 @@ int main(int argc, char *argv[]) {
 
     //Crear la vista
     pid_t pid = fork();
-    
+
     if (pid < 0) {
         perror("fork");
         exit(1);
     }
     if (pid == 0) {
         // vista
-        
         execl("./view", "vista", arg_w, arg_h, NULL);
         perror("execl view");
         exit(1);
@@ -249,16 +267,16 @@ int main(int argc, char *argv[]) {
     }*/
 
     /// semaforos
-    printf("ANTES DEL POST \n");
-   // sem_post(&sems->sem_view_notify);
-    printf("DESPUES DEL POST \n");
-    //sem_wait(&sems->sem_view_done);
-    printf("DESPPUES DEL WAIT \n");
-    usleep(2000);
+    printf("ANTES DEL POST");
+    //sem_post(&sync->sem_view_notify);
+    printf("DESPUES DEL POST");
+    //sem_wait(&sync->sem_view_done);
+    printf("DESPPUES DEL WAIT");
+    //usleep(2000);
     ///
     state->board[10]=-2;
-   // sem_post(&sems->sem_view_done);
-    //sem_post(&sems->sem_view_notify);
+    //sem_post(&sync->sem_view_done);
+    //sem_post(&sync->sem_view_notify);
     //usleep(delay);
 
     /*

@@ -13,6 +13,10 @@ gameState* create_shm_state(int width, int height);
 synchronization* creat_shm_sync(int num_players);
 int destroy_shm_state();
 int destroy_shm_sync();
+gameState* connect_shm_state();
+synchronization* connect_shm_sync();
+int close_shm_state(gameState* state);
+int close_shm_sync(synchronization* sync);
 
 // Funciones de sincronización
 void lock_writer(synchronization* sync);
