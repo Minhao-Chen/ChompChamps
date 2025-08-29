@@ -209,9 +209,7 @@ int main(int argc, char *argv[]) {
     printf("num_players: %d\n", state->player_count);
 
     for (int i = 0; i < state->player_count; i++){
-        printf("ANTES DELHIZO EL FORK");
         printf("  %s\n", state->players[i].name);
-        
     }
 
 
@@ -268,16 +266,16 @@ int main(int argc, char *argv[]) {
 
     /// semaforos
     printf("ANTES DEL POST");
-    //sem_post(&sync->sem_view_notify);
+    sem_post(&sync->sem_view_notify);
     printf("DESPUES DEL POST");
-    //sem_wait(&sync->sem_view_done);
+    sem_wait(&sync->sem_view_done);
     printf("DESPPUES DEL WAIT");
-    //usleep(2000);
+    usleep(2000);
     ///
     state->board[10]=-2;
-    //sem_post(&sync->sem_view_done);
-    //sem_post(&sync->sem_view_notify);
-    //usleep(delay);
+    sem_post(&sync->sem_view_done);
+    sem_post(&sync->sem_view_notify);
+    usleep(delay);
 
     /*
     // Esperar a que todos los hijos (jugadores más vista) terminen

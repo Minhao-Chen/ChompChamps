@@ -11,7 +11,7 @@
 
 
 gameState * state;
-synchronization* sync;
+synchronization* sems;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
@@ -49,14 +49,22 @@ char prev_buffer[BUFFER_SIZE]={0};
     (void)write(STDOUT_FILENO, buf, (pos < BUFFER_SIZE) ? pos : BUFFER_SIZE);
 }*/
 
+void player_poistion(){
+    for(int i = 0; i < state->player_count; i++){
+        state->players[i].score += state->board[state->players[i].pos_y * state->width + state->players[i].pos_x];
+        state->board[state->players[i].pos_y * state->width + state->players[i].pos_x] = -state->board[state->players[i].pos_y * state->width + state->players[i].pos_x];
+    }
+}
+
 void render_board() {
+     player_poistion();
     for (int y = 0; y < state->height; y++) {
         for (int x = 0; x < state->width; x++) {
             int cell = state->board[y * state->width + x];
             if (cell > 0) {
                 printf(" %d ", cell);   // recompensa
             } else {
-                int player_id = -cell;
+                int player_id = cell;
                 printf(" P%d", player_id); // jugador
             }
         }
@@ -84,37 +92,51 @@ void update_board_random() {
 }
 
 int main(int argc, char *argv[]) {
-    printf("VIEW: hola!\n");
-    fflush(stdout); // para q se vea con el flush
+     printf("VIEW: hola!\n");
+   // fflush(stdout); // para q se vea con el flush
 
-    printf("VISTA");
     srand((unsigned)time(NULL));
 
-    state = connect_shm_state();
+    int fd = shm_open(SHM_STATE, O_RDWR, 0666);
 
-    sync = connect_shm_sync();
+    if (fd == -1) { perror("shm_open"); exit(1); }
+
+    state = mmap(NULL, sizeof(gameState) + (atoi(argv[1]) * atoi(argv[2]) * sizeof(int)), //no es con argv[1] y [2]??
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, 0);
+    if (state == MAP_FAILED) { perror("mmap"); exit(1); }
+
+    fd = shm_open(SHM_SYNC, O_RDWR, 0666);
+    if (fd == -1) { perror("shm_open"); exit(1); }
+
+    sems = mmap(NULL, sizeof(synchronization),
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, 0);
+    if (sems == MAP_FAILED) { perror("mmap"); exit(1); }
 
 
     //while (state->active_game) {
-        printf("ANTES DEL WAIT VISTA");
-            fflush(stdout);  // para q se vea con el flush
+        printf("ANTES DEL WAIT VISTA \n");
+           // fflush(stdout);  // para q se vea con el flush
 
-        sem_wait(&sync->sem_view_notify);
+        sem_wait(&sems->sem_view_notify);
+
+       // fflush(stdout);  // para q se vea con el flush
+
         printf("\033[H\033[2J"); // limpiar
         render_board(state);
         render_players(state);
-        sem_post(&sync->sem_view_done);
+        sem_post(&sems->sem_view_done);
 
-        sem_wait(&sync->sem_view_notify);
+        sem_wait(&sems->sem_view_notify);
         printf("\033[H\033[2J"); // limpiar
-        render_board(state);
+        render_board(state); // el -2 sale del master...
         render_players(state);
-        sem_post(&sync->sem_view_done);
+        sem_post(&sems->sem_view_done);
         //sem_post()
-       // sem_post(&sync->sem_view_notify);
+       // sem_post(&sems->sem_view_notify);
     //}
 
-    
     
 
 
