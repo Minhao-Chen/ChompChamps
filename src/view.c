@@ -84,6 +84,11 @@ void update_board_random() {
 }
 
 int main(int argc, char *argv[]) {
+     printf("VIEW: hola!\n");
+    fflush(stdout); // para q se vea con el flush
+
+
+
     printf("VISTA");
     srand((unsigned)time(NULL));
     int fd = shm_open(SHM_STATE, O_RDWR, 0666);
@@ -105,6 +110,8 @@ int main(int argc, char *argv[]) {
 
     //while (state->active_game) {
         printf("ANTES DEL WAIT VISTA");
+            fflush(stdout);  // para q se vea con el flush
+
         sem_wait(&sems->sem_view_notify);
         printf("\033[H\033[2J"); // limpiar
         render_board(state);
@@ -120,6 +127,7 @@ int main(int argc, char *argv[]) {
        // sem_post(&sems->sem_view_notify);
     //}
 
+    
     
 
 
