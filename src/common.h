@@ -11,9 +11,11 @@
 #define DEFAULT_HEIGHT 10
 #define MAX_WIDTH  50
 #define MAX_HEIGHT 50
+#define MAX_LENGHT_NAME 16
+#define MAX_PLAYERS 9
 
 typedef struct { 
-    char name[16]; 
+    char name[MAX_LENGHT_NAME]; 
     unsigned int score;
     unsigned int invalid_move;
     unsigned int valid_move;
@@ -26,7 +28,7 @@ typedef struct {
     unsigned short width;
     unsigned short height;
     unsigned int player_count;
-    player players[9];
+    player players[MAX_PLAYERS];
     bool active_game;
     int board[];
 } gameState;

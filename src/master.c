@@ -10,19 +10,20 @@
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
 
-gameState * state = NULL;
-synchronization * sync = NULL;
+//gameState state;
+gameState * state_ptr = NULL;
+synchronization * sync_sem = NULL;
 
 char * view = NULL;
 unsigned int delay = DEFAULT_DELAY;
 unsigned int timeout = DEFAULT_TIMEOUT;
-unsigned int seed;
+unsigned int seed=0;
 
 
 static bool is_position_unique(int current_index) {
     for (int i = 0; i < current_index; i++) {
-        if (state->players[i].pos_x == state->players[current_index].pos_x &&
-            state->players[i].pos_y == state->players[current_index].pos_y) {
+        if (state_ptr->players[i].pos_x == state_ptr->players[current_index].pos_x &&
+            state_ptr->players[i].pos_y == state_ptr->players[current_index].pos_y) {
             return false;
         }
     }
@@ -30,25 +31,24 @@ static bool is_position_unique(int current_index) {
 }
 
 static void start_players() {
-    for (int i = 0; i < state->player_count; i++) {
-        memset(state->players[i].name, 0, sizeof(state->players[i].name));
-        state->players[i].score = 0;
-        state->players[i].invalid_move = 0;
-        state->players[i].valid_move = 0;
+    for (int i = 0; i < state_ptr->player_count; i++) {
+        state_ptr->players[i].score = 0;
+        state_ptr->players[i].invalid_move = 0;
+        state_ptr->players[i].valid_move = 0;
         
         // Posiciones iniciales únicas
         do {
-            state->players[i].pos_x = rand() % state->width;
-            state->players[i].pos_y = rand() % state->height;
+            state_ptr->players[i].pos_x = rand() % state_ptr->width;
+            state_ptr->players[i].pos_y = rand() % state_ptr->height;
         } while (!is_position_unique(i));
         
-        state->players[i].pid = 0;
-        state->players[i].blocked = false;
+        state_ptr->players[i].pid = 0;
+        state_ptr->players[i].blocked = false;
     }
 }
 
 // Función para parsear parámetros
-Config parse_arguments(int argc, char *argv[]) {
+/*Config parse_arguments(int argc, char *argv[]) {
     Config config = {
         .width = DEFAULT_WIDTH,
         .height = DEFAULT_HEIGHT,
@@ -113,21 +113,109 @@ Config parse_arguments(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
     return config;
-}
+}*/
 
-/* int parse_arguments(int argc, char *argv[]){
+// Función para parsear parámetros
+gameState parse_arguments(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
     }
+
+    gameState config_args = {
+        .width = DEFAULT_WIDTH,
+        .height = DEFAULT_HEIGHT,
+        .player_count=0,
+        .active_game=false,
+    };
+
+    for (int i = 0; i < 9; i++) {
+        memset(config_args.players[i].name, 0, MAX_LENGHT_NAME);
+    }
+
+    int opt;
+
+    while ((opt = getopt(argc, argv, "w:h:d:t:s:v:p:")) != -1) {
+        switch (opt) {
+            case 'w': {
+                int temp = atoi(optarg);
+                if (temp > 10) config_args.width = temp;
+                break;
+            }
+            case 'h': {
+                int temp = atoi(optarg);
+                if (temp > 10) config_args.height = temp;
+                break;
+            }
+            case 'd': {
+                delay = atoi(optarg);
+                break;
+            }
+            case 't': {
+                timeout = atoi(optarg);
+                break;
+            }
+            case 's': {
+                seed = (unsigned int)atoi(optarg);
+                break;
+            }
+            case 'v': {
+                view = optarg;
+                break;
+            }
+            case 'p': {
+                if (config_args.player_count < 9) {
+                    strncpy(config_args.players[config_args.player_count].name, optarg, MAX_LENGHT_NAME-1);
+                    config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
+                    config_args.player_count++;
+                }
+
+                // Jugadores siguientes
+                while (optind < argc && argv[optind][0] != '-' && config_args.player_count < 9) {
+                    strncpy(config_args.players[config_args.player_count].name, argv[optind], MAX_LENGHT_NAME-1);
+                    config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
+                    config_args.player_count++;
+                    optind++;
+                }
+                break;
+            }
+            default:
+                fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+
+    if (config_args.player_count == 0) {
+        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
+        exit(EXIT_FAILURE);
+    }
+    return config_args;
+}
+
+/* gameState parse_arguments(int argc, char *argv[]){
+    if (argc < 2) {
+        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
+        exit(EXIT_FAILURE);
+    }
+
+    gameState config_args = {
+        .width = DEFAULT_WIDTH,
+        .height = DEFAULT_HEIGHT,
+        .player_count=0,
+        .active_game=false,
+    };
+
+    for (int i = 0; i < 9; i++) {
+        memset(config_args.players[i].name, 0, MAX_LENGHT_NAME);
+    }
     
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-w") == 0 && i + 1 < argc) {
-            state->width = atoi(argv[++i]);
-            if (state->width < 10) state->width = 10;
+            int width_aux = atoi(argv[++i]);
+            if (width_aux > 10) config_args.width = width_aux;
         } else if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
-            state->height = atoi(argv[++i]);
-            if (state->height < 10) state->height = 10;
+            int height_aux = atoi(argv[++i]);
+            if (height_aux > 10) config_args.height = height_aux;
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             delay = atoi(argv[++i]);
         } else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
@@ -137,53 +225,60 @@ Config parse_arguments(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
             view = argv[++i];
         } else if (strcmp(argv[i], "-p") == 0) {
-            while (i + 1 < argc && argv[i + 1][0] != '-' && state->player_count < 9) {
-                strncpy(state->players[state->player_count++].name, argv[++i], sizeof(argv[i]) - 1);
-                //initial_player(&state->players[state->player_count++],argv[++i]);
+            while (i + 1 < argc && argv[i + 1][0] != '-' && config_args.player_count < 9) {
+                i++;
+                for (int j = 0; j < MAX_LENGHT_NAME-1 && argv[i][j]!=0; j++){
+                    config_args.players[config_args.player_count].name[j] = argv[i][j];
+                }
+                config_args.player_count++;
             }
         }
     }
 
-    if (state->player_count < 1) {
+    if (config_args.player_count < 1) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
     }
 
-    return 0;
-} */
+    return config_args;
+
+}*/
 
 
-void createGameState (Config config){
+void createGameState (gameState state){
 
-    state = create_shm_state(config.width, config.height);
+    state_ptr = create_shm_state(state.width, state.height);
 
-    if (state == NULL) {
+    if (state_ptr == NULL) {
         fprintf(stderr, "Error creando shared memory del estado\n");
         exit(EXIT_FAILURE);
     }
 
     // Inicializar estructura
-    state->width = config.width;
-    state->height = config.height;
-    state->player_count = config.num_players;
-    state->active_game = true;
-    for (int i = 0; i < config.num_players; i++) {
-        strncpy(state->players[i].name, config.player_names[i], sizeof(state->players[i].name) - 1);
-        state->players[i].name[sizeof(state->players[i].name) - 1] = '\0';
+    state_ptr->width = state.width;
+    state_ptr->height = state.height;
+    state_ptr->player_count = state.player_count;
+    state_ptr->active_game = true;
+    for (int i = 0; i < state.player_count; i++) {
+        for (int j = 0; state.players[i].name[j]!=0; j++){
+            state_ptr->players[i].name[j]=state.players[i].name[j];
+        }
+        //strncpy(state->players[i].name, config.player_names[i], sizeof(state->players[i].name) - 1);
+        //state->players[i].name[sizeof(state->players[i].name) - 1] = '\0';
     }
 
     // Llena con aleatorios entre 1 y 9
-    for (int i = 0; i < state->height; i++) {
-        for (int j = 0; j < state->width; j++) {
-            state->board[j+i*state->width] = (rand() % 9) + 1;
+    for (int i = 0; i < state_ptr->height; i++) {
+        for (int j = 0; j < state_ptr->width; j++) {
+            state_ptr->board[j+i*state_ptr->width] = (rand() % 9) + 1;
         }
     }
     start_players();
 }
 
 void createSync (int player_count){
-    sync = creat_shm_sync(player_count);
-    if(sync == NULL){
+    sync_sem = creat_shm_sync(player_count);
+    if(sync_sem == NULL){
         fprintf(stderr, "Error creando shared memeory del semaforo");
         exit(EXIT_FAILURE);
     }
@@ -191,32 +286,38 @@ void createSync (int player_count){
 
 int main(int argc, char *argv[]) {
 
-    Config config = parse_arguments(argc, argv);
+    //Config config = parse_arguments(argc, argv);
 
-    seed = (config.seed == 0) ? (unsigned int)time(NULL) : config.seed;
+    gameState state = parse_arguments(argc, argv);
+
+    //seed = (config.seed == 0) ? (unsigned int)time(NULL) : config.seed;
+    if (seed == 0){
+        seed = (unsigned int)time(NULL);
+    }
+    
     srand(seed);
     
-    createGameState(config);
-    createSync(state->player_count);
+    createGameState(state);
+    createSync(state_ptr->player_count);
 
     // Imprimir en el formato solicitado
-    printf("width: %u\n", state->width);
-    printf("height: %u\n", state->height);
+    printf("width: %u\n", state_ptr->width);
+    printf("height: %u\n", state_ptr->height);
     printf("delay: %u\n", delay);
     printf("timeout: %u\n", timeout);
     printf("seed: %u\n", seed);
     printf("view: %s\n", view ? view : "-");
-    printf("num_players: %d\n", state->player_count);
+    printf("num_players: %d\n", state_ptr->player_count);
 
-    for (int i = 0; i < state->player_count; i++){
-        printf("  %s\n", state->players[i].name);
+    for (int i = 0; i < state_ptr->player_count; i++){
+        printf("  %s\n", state_ptr->players[i].name);
     }
 
 
     int status;
     char arg_w[16], arg_h[16], num_player[16]; // ver bien esto..., se pasan como strings...
-    sprintf(arg_w, "%d", state->width);
-    sprintf(arg_h, "%d", state->height);
+    sprintf(arg_w, "%d", state_ptr->width);
+    sprintf(arg_h, "%d", state_ptr->height);
 
     //Crear la vista
     pid_t pid = fork();
@@ -266,15 +367,15 @@ int main(int argc, char *argv[]) {
 
     /// semaforos
     printf("ANTES DEL POST");
-    sem_post(&sync->sem_view_notify);
+    sem_post(&sync_sem->sem_view_notify);
     printf("DESPUES DEL POST");
-    sem_wait(&sync->sem_view_done);
+    sem_wait(&sync_sem->sem_view_done);
     printf("DESPPUES DEL WAIT");
     usleep(2000);
     ///
-    state->board[10]=-2;
-    sem_post(&sync->sem_view_done);
-    sem_post(&sync->sem_view_notify);
+    state_ptr->board[10]=-2;
+    sem_post(&sync_sem->sem_view_done);
+    sem_post(&sync_sem->sem_view_notify);
     usleep(delay);
 
     /*
