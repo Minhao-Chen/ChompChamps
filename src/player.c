@@ -7,13 +7,13 @@
 
 #define NMOVS 8
 
-gameState * state;
-synchronization * sync;
+gameState * state_ptr;
+synchronization * sync_ptr;
 
 bool adentro(int w, int h, player * p, int x, int y);
 void movement(int w, int h, player * p, int movs[NMOVS][2], int board[10][10]);
 
-int main(int argc, char *argv[]){
+int main2(int argc, char *argv[]){
      if (argc < 4) {
         //fprintf(stderr, "Uso: %s <i> <pid>\n", argv[0]);
         return 1;
@@ -34,14 +34,14 @@ int main(int argc, char *argv[]){
     {-1, -1}  // Noroeste
     };
 
-    state = connect_shm_state();
-    sync = connect_shm_sync(); 
+    state_ptr = connect_shm_state();
+    sync_ptr = connect_shm_sync(); 
 
     int board[10][10]; // es como ejemplo esto, despues usar el board posta
 
     while(1){
         //ver bien lo de los semaforos
-        movement(width, height, &state->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
+        movement(width, height, &state_ptr->players[num_jugador], movs, board/*seria el board pero es una matriz.....*/);
     }
 
     //no hace falta hacer open con los semaforos pq estan init
@@ -68,4 +68,70 @@ void movement(int w, int h, player * p, int movs[NMOVS][2], int board[10][10]){ 
 
 bool adentro(int w, int h, player * p, int x, int y){
   return p->pos_y+y >= 0 && p->pos_y+y < h && p->pos_x+x >= 0 && p->pos_x+x < w ? true : false; 
+}
+
+
+
+
+
+int main(int argc, char *argv[]) {
+    int width = atoi(argv[1]);
+    int height = atoi(argv[2]);
+    int player_id = atoi(argv[3]);
+
+    int fd = shm_open(SHM_STATE, O_RDWR, 0666);
+
+    if (fd == -1) { perror("shm_open"); exit(1); }
+
+    state_ptr = mmap(NULL, sizeof(gameState) + (atoi(argv[1]) * atoi(argv[2]) * sizeof(int)), //no es con argv[1] y [2]??
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, 0);
+    if (state_ptr == MAP_FAILED) { perror("mmap"); exit(1); }
+
+    fd = shm_open(SHM_SYNC, O_RDWR, 0666);
+    if (fd == -1) { perror("shm_open"); exit(1); }
+
+    sync_ptr = mmap(NULL, sizeof(synchronization),
+                             PROT_READ | PROT_WRITE,
+                             MAP_SHARED, fd, 0);
+    if (sync_ptr == MAP_FAILED) { perror("mmap"); exit(1); }
+
+    
+
+    while (1) {
+        sem_wait(&sync_ptr->sem_players[player_id]);
+
+        
+
+        sem_wait(&sync_ptr->sem_counter_lock);
+        sync_ptr->reader_activated++;
+        if (sync_ptr->reader_activated == 1) {
+            // Primer lector → bloquea al máster
+            sem_wait(&sync_ptr->sem_master_starvation);
+        }
+        sem_post(&sync_ptr->sem_counter_lock);
+
+
+        sem_wait(&sync_ptr->sem_state_lock);
+        // ... lee el tablero ...
+        sem_post(&sync_ptr->sem_state_lock);
+
+
+        sem_wait(&sync_ptr->sem_counter_lock);
+        sync_ptr->reader_activated--;
+        if (sync_ptr->reader_activated == 0) {
+            // Último lector libera al máster
+            sem_post(&sync_ptr->sem_master_starvation);
+        }
+
+        sem_post(&sync_ptr->sem_counter_lock);
+
+        // Leer estado del tablero en shm (con lock si hace falta)
+        // Calcular jugada automática:
+        unsigned char move = rand() % 8;
+
+        // Enviar movimiento al master
+        printf("%c", move);
+        fflush(stdout);
+    }
 }

@@ -6,13 +6,14 @@
 #include "ipc_utils.h"
 #include <time.h>
 #include <getopt.h>
+#include <sys/select.h>
 
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
 
 //gameState state;
 gameState * state_ptr = NULL;
-synchronization * sync_sem = NULL;
+synchronization * sync_ptr = NULL;
 
 char * view = NULL;
 unsigned int delay = DEFAULT_DELAY;
@@ -277,8 +278,8 @@ void createGameState (gameState state){
 }
 
 void createSync (int player_count){
-    sync_sem = creat_shm_sync(player_count);
-    if(sync_sem == NULL){
+    sync_ptr = creat_shm_sync(player_count);
+    if(sync_ptr == NULL){
         fprintf(stderr, "Error creando shared memeory del semaforo");
         exit(EXIT_FAILURE);
     }
@@ -328,16 +329,16 @@ int main(int argc, char *argv[]) {
     }
     if (pid == 0) {
         // vista
-        execl("./view", "vista", arg_w, arg_h, NULL);
+        execl(view, "vista", arg_w, arg_h, NULL);
         perror("execl view");
         exit(1);
     }
 
     
-    /*int N = state->player_count;
-    int pipes[state->player_count][2]; // te abre pipe para cada jugador
+    int N = state_ptr->player_count;
+    int pipes[N][2]; // te abre pipe para cada jugador
     int fds[N]; // solo los read-ends para el select
-    for (int i = 0; i < state->player_count; i++) {
+    for (int i = 0; i < N; i++) {
         if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
         pid_t pid = fork();
         if (pid < 0) {
@@ -347,36 +348,153 @@ int main(int argc, char *argv[]) {
         if (pid == 0) {
                // jugador
             close(pipes[i][0]);
-            dup2(pipes[i][1], 1); // redirijo stdout → pipe
+            dup2(pipes[i][1], STDOUT_FILENO); // redirijo stdout → pipe
             close(pipes[i][1]); // cierro el original, ya no lo necesito
             
             sprintf(num_player, "%d", i);
 
 
-            execl("./player", "jugador", arg_w, arg_h, num_player, NULL); //le pondria la i ahi, para saber q numero de jugador es
+            execl(state_ptr->players[i].name, "jugador", arg_w, arg_h, num_player, NULL); //le pondria la i ahi, para saber q numero de jugador es
             perror("execl jugador");
             exit(1);
         } else {
             // master
             close(pipes[i][1]);
             fds[i] = pipes[i][0];            // guardo el read-end para select
-            state->players[i].pid = pid;
-            printf("Jugador %d pid=%d name=%s\n", i, pid, state->players[i].name);
+            state_ptr->players[i].pid = pid;
+            printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
         }
-    }*/
+    }
 
     /// semaforos
-    printf("ANTES DEL POST");
-    sem_post(&sync_sem->sem_view_notify);
-    printf("DESPUES DEL POST");
-    sem_wait(&sync_sem->sem_view_done);
-    printf("DESPPUES DEL WAIT");
+    /*printf("ANTES DEL POST\n");
+    sem_post(&sync_ptr->sem_view_notify);
+    printf("DESPUES DEL POST\n");
+    sem_wait(&sync_ptr->sem_view_done);
+    printf("DESPPUES DEL WAIT\n");
     usleep(2000);
     ///
     state_ptr->board[10]=-2;
-    sem_post(&sync_sem->sem_view_done);
-    sem_post(&sync_sem->sem_view_notify);
-    usleep(delay);
+    sem_post(&sync_ptr->sem_view_done);
+    sem_post(&sync_ptr->sem_view_notify);
+    usleep(delay);*/
+
+    fd_set readfds;
+    unsigned char move;
+    int maxfd = 0;
+
+    // Habilitamos a todos los jugadores al inicio
+    for (int i = 0; i < N; i++) {
+        sem_post(&sync_ptr->sem_players[i]);
+        if (fds[i] > maxfd) maxfd = fds[i];
+    }
+
+    // Bucle principal
+    while (state_ptr->active_game) {
+        FD_ZERO(&readfds);
+
+        // Agregamos todos los pipes de los jugadores
+        for (int i = 0; i < N; i++) {
+            FD_SET(fds[i], &readfds);
+        }
+
+        // Timeout opcional (1s)
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+
+        int ready = select(maxfd + 1, &readfds, NULL, NULL, &tv);
+
+        if (ready < 0) {
+            perror("select");
+            exit(1);
+        } else if (ready == 0) {
+            // Timeout → ningún jugador respondió
+            // Podés seguir o marcar bloqueados
+        } else {
+            for (int i = 0; i < N; i++) {
+                if (FD_ISSET(fds[i], &readfds)) {
+                    int n = read(fds[i], &move, 1);
+                    if (n <= 0) {
+                        // EOF → jugador bloqueado
+                        state_ptr->players[i].blocked = 1;
+                    } else {
+                        // Bloquear estado para aplicar movimiento
+                        sem_wait(&sync_ptr->sem_master_starvation);
+                        sem_wait(&sync_ptr->sem_state_lock);
+
+                        if (is_valid_movement(move, state_ptr, i)) {
+                            apply_movement(move, state_ptr, i);
+                        } else {
+                            state_ptr->players[i].invalid_move++;
+                        }
+
+                        sem_post(&sync_ptr->sem_state_lock);
+                        sem_post(&sync_ptr->sem_master_starvation);
+
+                    }
+
+                    // Habilitar de nuevo al jugador
+                    sem_post(&sync_ptr->sem_players[i]);
+                }
+            }
+        }
+
+        // Notificar a la vista
+        sem_post(&sync_ptr->sem_view_notify);
+        sem_wait(&sync_ptr->sem_view_done);
+
+        // Delay entre actualizaciones
+        usleep(delay * 1000);
+    }
+
+
+    /*
+    
+    
+        void master_tick_select(ZZZ *z,  
+        void *state,
+                        int player_count, int ready_rd[]) {
+    static int rr = 0;
+    int id = rr; rr = (rr + 1) % player_count;
+
+    // 1) Permiso por semáforo (máster -> jugador)
+    sem_post(&z->G[id]);
+
+    // 2) Esperar su notificación con select()
+    fd_set rset; FD_ZERO(&rset);
+    FD_SET(ready_rd[id], &rset);
+    int maxfd = ready_rd[id];
+
+    if (select(maxfd+1, &rset, NULL, NULL, NULL) > 0 &&
+        FD_ISSET(ready_rd[id], &rset)) {
+        uint8_t sink;
+        // drenar 1+ bytes si hubiera burst
+        while (read(ready_rd[id], &sink, 1) == 1) {  break; }
+
+        // 3) Aplicar movimiento con lock de ESCRITOR (C/D)
+        sem_wait(&z->C);
+        sem_wait(&z->D);
+
+        Move mv = z->inbox[id];
+        // apply_move(state, id, mv);
+
+        sem_post(&z->D);
+        sem_post(&z->C);
+
+        // 4) Notificar a la vista (A/B)
+        sem_post(&z->A);
+        sem_wait(&z->B);
+    }
+}
+    
+    
+    
+    */
+    
+    close_shm_sync(sync_ptr);
+    close_shm_state(state_ptr);
+
 
     /*
     // Esperar a que todos los hijos (jugadores más vista) terminen
