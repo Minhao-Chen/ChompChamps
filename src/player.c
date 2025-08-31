@@ -51,53 +51,37 @@ int main(int argc, char *argv[]) {
     int height = atoi(argv[2]);
     int player_id = atoi(argv[3]);
 
-    int fd = shm_open(SHM_STATE, O_RDWR, 0666);
+    state_ptr = connect_shm_state();
+    if (state_ptr == NULL) { perror("connect_shm_state"); exit(1); }
 
-    if (fd == -1) { perror("shm_open"); exit(1); }
-
-    state_ptr = mmap(NULL, sizeof(gameState) + (width * height* sizeof(int)), //no es con argv[1] y [2]??
-                             PROT_READ | PROT_WRITE,
-                             MAP_SHARED, fd, 0);
-    if (state_ptr == MAP_FAILED) { perror("mmap"); exit(1); }
-
-    fd = shm_open(SHM_SYNC, O_RDWR, 0666);
-    if (fd == -1) { perror("shm_open"); exit(1); }
-
-    sync_ptr = mmap(NULL, sizeof(synchronization),
-                             PROT_READ | PROT_WRITE,
-                             MAP_SHARED, fd, 0);
-    if (sync_ptr == MAP_FAILED) { perror("mmap"); exit(1); }
+    sync_ptr = connect_shm_sync();
+    if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
     
 
     while (1) {
-        sem_wait(&sync_ptr->sem_players[player_id]);
+        player_wait_turn(sync_ptr, player_id);
 
-          sem_wait(&sync_ptr->sem_master_starvation);     // turnstile (paso breve)
-        sem_wait(&sync_ptr->sem_counter_lock);
-        sync_ptr->reader_activated++;
-        if (sync_ptr->reader_activated == 1) {
-            // Primer lector → bloquea al máster
-            //sem_wait(&sync_ptr->sem_master_starvation); 
-             sem_wait(&sync_ptr->sem_state_lock);
+        if (!state_ptr->active_game) {
+            break;
         }
-        sem_post(&sync_ptr->sem_counter_lock);
-        sem_post(&sync_ptr->sem_master_starvation);     // liberar turnstile rápido
+        //lock_writer(sync_ptr);     // turnstile (paso breve)
+        lock_reader(sync_ptr);
+        //unlock_writer(sync_ptr);     // liberar turnstile rápido
 
+        if (!state_ptr->active_game) {
+            unlock_reader(sync_ptr);
+            break;
+        }
         movement(state_ptr->width, state_ptr->height, &state_ptr->players[player_id]);
         //sem_wait(&sync_ptr->sem_state_lock);
         // ... lee el tablero ...
         //sem_post(&sync_ptr->sem_state_lock);
 
 
-        sem_wait(&sync_ptr->sem_counter_lock);
-        sync_ptr->reader_activated--;
-        if (sync_ptr->reader_activated == 0) {
-            // Último lector libera al máster
-            //sem_post(&sync_ptr->sem_master_starvation);
-            sem_post(&sync_ptr->sem_state_lock);
-        }
-
-        sem_post(&sync_ptr->sem_counter_lock);
+        unlock_reader(sync_ptr);
     }
+
+    close_shm_sync(sync_ptr);
+    close_shm_state(state_ptr);
 }

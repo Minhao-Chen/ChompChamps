@@ -300,7 +300,7 @@ int main(int argc, char *argv[]) {
 
     // Habilitamos a todos los jugadores al inicio
     for (int i = 0; i < N; i++) {
-        sem_post(&sync_ptr->sem_players[i]);
+        master_release_player(sync_ptr, i);
         if (fds[i] > maxfd) maxfd = fds[i];
     }
 
@@ -343,8 +343,7 @@ int main(int argc, char *argv[]) {
                         state_ptr->players[i].blocked = true;
                     } else {
                         // Bloquear estado para aplicar movimiento
-                        sem_wait(&sync_ptr->sem_master_starvation);
-                        sem_wait(&sync_ptr->sem_state_lock);
+                        lock_writer(sync_ptr);
 
                         if (is_valid_movement(move, i)) {
                             apply_movement(move, i);
@@ -354,28 +353,30 @@ int main(int argc, char *argv[]) {
                             state_ptr->players[i].invalid_move++;
                         }
 
-                        sem_post(&sync_ptr->sem_state_lock);
-                        sem_post(&sync_ptr->sem_master_starvation);
+                        unlock_writer(sync_ptr);
 
                     }
 
                     // Habilitar de nuevo al jugador
-                    sem_post(&sync_ptr->sem_players[i]);
+                    master_release_player(sync_ptr, i);
                 }
             }
         }
 
         // Notificar a la vista
-        sem_post(&sync_ptr->sem_view_notify);
-        sem_wait(&sync_ptr->sem_view_done);
+        master_notify_view(sync_ptr);
+        master_wait_view(sync_ptr);
 
         // Delay entre actualizaciones
         usleep(delay * 1000);
     }
     
-    close_shm_sync(sync_ptr);
-    close_shm_state(state_ptr);
+    lock_writer(sync_ptr);
+    state_ptr->active_game = false;
+    unlock_writer(sync_ptr);
 
+    master_notify_view(sync_ptr);
+    master_wait_view(sync_ptr);
 
     
     // Esperar a que todos los hijos (jugadores más vista) terminen
@@ -390,6 +391,9 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+
+    destroy_shm_sync(sync_ptr, state_ptr->player_count);
+    destroy_shm_state(state_ptr);
 
     printf("Padre: todos los hijos terminaron, fin del programa.\n");
     return 0;

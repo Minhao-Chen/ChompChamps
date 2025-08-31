@@ -30,7 +30,7 @@ gameState* create_shm_state(int width, int height){
         close(shm_state_fd);
         return NULL;
     }
-    
+
     return state;
 }
 
@@ -188,6 +188,10 @@ int close_shm_sync(synchronization* sync) {
 int destroy_shm_state(gameState* state){
     int result = 0;
 
+    if (state == NULL) {
+        return 0; // Ya es NULL, nada que hacer
+    }
+
     if(shm_state_fd != -1){
         if (state != MAP_FAILED) {
             if (munmap(state, get_state_size(state->width, state->height)) == -1) {
@@ -213,6 +217,11 @@ int destroy_shm_state(gameState* state){
 
 int destroy_shm_sync(synchronization* sync, int num_players){
     int result = 0;
+
+    if(sync == NULL){
+        return 0;
+    }
+
     if(shm_sync_fd != -1){
         if (sync != MAP_FAILED) {
             for (int i = 0; i < num_players; i++) {
