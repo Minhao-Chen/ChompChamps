@@ -15,52 +15,8 @@ synchronization* sync_ptr;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
-
-// MÉTODO 1: Renderizado completo con buffer único
-/*static void render_full_buffer() {
-    // limpia pantalla
-    (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
-
-    char *buf = render_buffer;
-    int   pos = 0;
-
-    // Cursor al inicio
-    int n = snprintf(buf + pos, (pos < BUFFER_SIZE) ? BUFFER_SIZE - pos : 0,
-                     "\033[H");
-    pos += (n > 0) ? n : 0;
-
-    // Dibuja tablero con control de capacidad para evitar overflow
-    for (int i = 0; i < state_ptr->height; i++) {
-        n = snprintf(buf + pos, (pos < BUFFER_SIZE) ? BUFFER_SIZE - pos : 0, "|");
-        pos += (n > 0) ? n : 0;
-
-        for (int j = 0; j < state_ptr->width; j++) {
-            n = snprintf(buf + pos, (pos < BUFFER_SIZE) ? BUFFER_SIZE - pos : 0,
-                         "%3d|", state_ptr->board[i*state_ptr->width+j]);
-            pos += (n > 0) ? n : 0;
-            if (pos >= BUFFER_SIZE - 8) break; // margen de seguridad
-        }
-        n = snprintf(buf + pos, (pos < BUFFER_SIZE) ? BUFFER_SIZE - pos : 0, "\n");
-        pos += (n > 0) ? n : 0;
-        if (pos >= BUFFER_SIZE - 8) break;
-    }
-
-    // imprime lo que entró en el buffer
-    (void)write(STDOUT_FILENO, buf, (pos < BUFFER_SIZE) ? pos : BUFFER_SIZE);
-}*/
-
-void player_poistion(){
-    for(int i = 0; i < state_ptr->player_count; i++){
-        if(state_ptr->board[state_ptr->players[i].pos_y * state_ptr->width + state_ptr->players[i].pos_x] > 0){
-             state_ptr->players[i].score += state_ptr->board[state_ptr->players[i].pos_y * state_ptr->width + state_ptr->players[i].pos_x];
-            state_ptr->board[state_ptr->players[i].pos_y * state_ptr->width + state_ptr->players[i].pos_x] = -i;
-        }
-    
-    }
-}
-
 void render_board() {
-    player_poistion();
+    //player_poistion();
 
     for (int y = 0; y < state_ptr->height; y++) {
         for (int x = 0; x < state_ptr->width; x++) {
@@ -70,7 +26,7 @@ void render_board() {
             // ¿Hay un jugador en esta celda?
             for (int i = 0; i < state_ptr->player_count; i++) {
                 if (y == state_ptr->players[i].pos_y && x == state_ptr->players[i].pos_x) {
-                    printf("Player ");
+                    printf("P ");
                     printed = 1;
                     break; // ya encontramos un jugador, no hace falta seguir
                 }
@@ -129,44 +85,19 @@ int main(int argc, char *argv[]) {
     if (sync_ptr == MAP_FAILED) { perror("mmap"); exit(1); }
 
 
-    while (state_ptr->active_game){
+    while (1){
         sem_wait(&sync_ptr->sem_view_notify);
-        printf("\033[H\033[2J");
-        //(void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
+        //printf("\033[H\033[2J");
+        (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
+        if (!state_ptr->active_game){
+            break;
+        }
+        
         render_board(state_ptr);
         render_players(state_ptr);
         sem_post(&sync_ptr->sem_view_done);
     }
-    
 
-
-    //while (state_ptr->active_game) {
-       /* printf("ANTES DEL WAIT VISTA \n");
-           // fflush(stdout);  // para q se vea con el flush
-
-        sem_wait(&sync_ptr->sem_view_notify);
-
-       // fflush(stdout);  // para q se vea con el flush
-
-        printf("\033[H\033[2J"); // limpiar
-        render_board(state_ptr);
-        render_players(state_ptr);
-        sem_post(&sync_ptr->sem_view_done);
-
-        sem_wait(&sync_ptr->sem_view_notify);
-        printf("\033[H\033[2J"); // limpiar
-        render_board(state_ptr); // el -2 sale del master...
-        render_players(state_ptr);
-        sem_post(&sync_ptr->sem_view_done);*/
-        //sem_post()
-       // sem_post(&sync_ptr->sem_view_notify);
-    //}
-
-    
-
-
-
-    //restore_terminal();
     printf("\n\nSimulacion terminada.\n");
     return 0;
 }

@@ -48,73 +48,6 @@ static void start_players() {
     }
 }
 
-// Función para parsear parámetros
-/*Config parse_arguments(int argc, char *argv[]) {
-    Config config = {
-        .width = DEFAULT_WIDTH,
-        .height = DEFAULT_HEIGHT,
-        .delay_ms = DEFAULT_DELAY,
-        .timeout_sec = DEFAULT_TIMEOUT,
-        .seed = 0,
-        .view_path = NULL,
-        .num_players = 0
-    };
-
-    for (int i = 0; i < 9; i++) {
-        config.player_names[i] = NULL;
-    }
-
-    int opt;
-
-    while ((opt = getopt(argc, argv, "w:h:d:t:s:v:p:")) != -1) {
-        switch (opt) {
-            case 'w': {
-                int temp = atoi(optarg);
-                if (temp >= 10) config.width = temp;
-                break;
-            }
-            case 'h': {
-                int temp = atoi(optarg);
-                if (temp >= 10) config.height = temp;
-                break;
-            }
-            case 'd': {
-                config.delay_ms = atoi(optarg);
-                break;
-            }
-            case 't': {
-                config.timeout_sec = atoi(optarg);
-                break;
-            }
-            case 's': {
-                config.seed = (unsigned int)atoi(optarg);
-                break;
-            }
-            case 'v': {
-                config.view_path = optarg;
-                break;
-            }
-            case 'p': {
-                while (optind-1 < argc && argv[optind-1][0] != '-') {
-                    if (config.num_players < 9) {
-                        config.player_names[config.num_players++] = argv[optind-1];
-                    }
-                    optind++;
-                }
-                break;
-            }
-            default:
-                fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
-                exit(EXIT_FAILURE);
-        }
-    }
-
-    if (config.num_players == 0) {
-        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
-        exit(EXIT_FAILURE);
-    }
-    return config;
-}*/
 
 // Función para parsear parámetros
 gameState parse_arguments(int argc, char *argv[]) {
@@ -165,15 +98,25 @@ gameState parse_arguments(int argc, char *argv[]) {
                 break;
             }
             case 'p': {
-                if (config_args.player_count < 9) {
-                    strncpy(config_args.players[config_args.player_count].name, optarg, MAX_LENGHT_NAME-1);
-                    config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
-                    config_args.player_count++;
-                }
+                    if (config_args.player_count < 9) {
+                        memset(config_args.players[config_args.player_count].name, 0, MAX_LENGHT_NAME);
+                        for (int i = 0; i < MAX_LENGHT_NAME-1 && optarg[i]!=0; i++){
+                            config_args.players[config_args.player_count].name[i]=optarg[i];
+                        }
+                        
+
+                        //strncpy(config_args.players[config_args.player_count].name, optarg, MAX_LENGHT_NAME-1);
+                        config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
+                        config_args.player_count++;
+                    }
 
                 // Jugadores siguientes
                 while (optind < argc && argv[optind][0] != '-' && config_args.player_count < 9) {
-                    strncpy(config_args.players[config_args.player_count].name, argv[optind], MAX_LENGHT_NAME-1);
+                    memset(config_args.players[config_args.player_count].name, 0, MAX_LENGHT_NAME);
+                        for (int i = 0; i < MAX_LENGHT_NAME-1 && optarg[i]!=0; i++){
+                            config_args.players[config_args.player_count].name[i]=optarg[i];
+                        }
+                    //strncpy(config_args.players[config_args.player_count].name, argv[optind], MAX_LENGHT_NAME-1);
                     config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
                     config_args.player_count++;
                     optind++;
@@ -193,59 +136,6 @@ gameState parse_arguments(int argc, char *argv[]) {
     return config_args;
 }
 
-/* gameState parse_arguments(int argc, char *argv[]){
-    if (argc < 2) {
-        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    gameState config_args = {
-        .width = DEFAULT_WIDTH,
-        .height = DEFAULT_HEIGHT,
-        .player_count=0,
-        .active_game=false,
-    };
-
-    for (int i = 0; i < 9; i++) {
-        memset(config_args.players[i].name, 0, MAX_LENGHT_NAME);
-    }
-    
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-w") == 0 && i + 1 < argc) {
-            int width_aux = atoi(argv[++i]);
-            if (width_aux > 10) config_args.width = width_aux;
-        } else if (strcmp(argv[i], "-h") == 0 && i + 1 < argc) {
-            int height_aux = atoi(argv[++i]);
-            if (height_aux > 10) config_args.height = height_aux;
-        } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
-            delay = atoi(argv[++i]);
-        } else if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
-            timeout = atoi(argv[++i]);
-        } else if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
-            seed = (unsigned int)atoi(argv[++i]);
-        } else if (strcmp(argv[i], "-v") == 0 && i + 1 < argc) {
-            view = argv[++i];
-        } else if (strcmp(argv[i], "-p") == 0) {
-            while (i + 1 < argc && argv[i + 1][0] != '-' && config_args.player_count < 9) {
-                i++;
-                for (int j = 0; j < MAX_LENGHT_NAME-1 && argv[i][j]!=0; j++){
-                    config_args.players[config_args.player_count].name[j] = argv[i][j];
-                }
-                config_args.player_count++;
-            }
-        }
-    }
-
-    if (config_args.player_count < 1) {
-        fprintf(stderr, "Error: At least one player must be specified using -p.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    return config_args;
-
-}*/
-
-
 void createGameState (gameState state){
 
     state_ptr = create_shm_state(state.width, state.height);
@@ -261,11 +151,10 @@ void createGameState (gameState state){
     state_ptr->player_count = state.player_count;
     state_ptr->active_game = true;
     for (int i = 0; i < state.player_count; i++) {
+        memset(state_ptr->players[i].name, 0, MAX_LENGHT_NAME);
         for (int j = 0; state.players[i].name[j]!=0; j++){
             state_ptr->players[i].name[j]=state.players[i].name[j];
         }
-        //strncpy(state->players[i].name, config.player_names[i], sizeof(state->players[i].name) - 1);
-        //state->players[i].name[sizeof(state->players[i].name) - 1] = '\0';
     }
 
     // Llena con aleatorios entre 1 y 9
@@ -285,13 +174,50 @@ void createSync (int player_count){
     }
 }
 
-int main(int argc, char *argv[]) {
+bool is_valid_movement(unsigned char move, int id){
+    if (move > 7){
+        return false;
+    }
 
-    //Config config = parse_arguments(argc, argv);
+    int next_x = state_ptr->players[id].pos_x + movs[move][0]; 
+    int next_y = state_ptr->players[id].pos_y + movs[move][1]; 
+
+    if (next_x < 0 || next_y < 0 || next_x >= state_ptr->width || next_y >= state_ptr->height){
+        return false;
+    }
+
+    int next_pos = state_ptr->board[next_y * state_ptr->width + next_x];
+
+    if (next_pos<=0){
+        return false;
+    }
+
+    return true;
+    
+}
+
+void apply_movement(unsigned char move, int id){
+    if (move > 7){
+        return;
+    }
+
+    int next_x = state_ptr->players[id].pos_x + movs[move][0]; 
+    int next_y = state_ptr->players[id].pos_y + movs[move][1]; 
+
+    state_ptr->players[id].pos_x = next_x;
+    state_ptr->players[id].pos_y = next_y;
+
+    state_ptr->players[id].score+=state_ptr->board[next_y * state_ptr->width + next_x];
+
+    state_ptr->board[next_y * state_ptr->width + next_x] = -id;
+    
+}
+
+
+int main(int argc, char *argv[]) {
 
     gameState state = parse_arguments(argc, argv);
 
-    //seed = (config.seed == 0) ? (unsigned int)time(NULL) : config.seed;
     if (seed == 0){
         seed = (unsigned int)time(NULL);
     }
@@ -366,22 +292,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /// semaforos
-    /*printf("ANTES DEL POST\n");
-    sem_post(&sync_ptr->sem_view_notify);
-    printf("DESPUES DEL POST\n");
-    sem_wait(&sync_ptr->sem_view_done);
-    printf("DESPPUES DEL WAIT\n");
-    usleep(2000);
-    ///
-    state_ptr->board[10]=-2;
-    sem_post(&sync_ptr->sem_view_done);
-    sem_post(&sync_ptr->sem_view_notify);
-    usleep(delay);*/
-
     fd_set readfds;
     unsigned char move;
     int maxfd = 0;
+
+    
 
     // Habilitamos a todos los jugadores al inicio
     for (int i = 0; i < N; i++) {
@@ -389,8 +304,19 @@ int main(int argc, char *argv[]) {
         if (fds[i] > maxfd) maxfd = fds[i];
     }
 
+    time_t last_valid_request = time(NULL);
+
     // Bucle principal
     while (state_ptr->active_game) {
+        // Revisar si superó timeout desde la última solicitud válida
+        time_t now = time(NULL);
+        if (difftime(now, last_valid_request) >= timeout) {
+            printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
+            state_ptr->active_game = false;
+            break;
+        }
+
+
         FD_ZERO(&readfds);
 
         // Agregamos todos los pipes de los jugadores
@@ -400,31 +326,30 @@ int main(int argc, char *argv[]) {
 
         // Timeout opcional (1s)
         struct timeval tv;
-        tv.tv_sec = 1;
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;
+        tv.tv_usec = 500000;
 
         int ready = select(maxfd + 1, &readfds, NULL, NULL, &tv);
 
         if (ready < 0) {
             perror("select");
             exit(1);
-        } else if (ready == 0) {
-            // Timeout → ningún jugador respondió
-            // Podés seguir o marcar bloqueados
-        } else {
+        } else if (ready > 0){
             for (int i = 0; i < N; i++) {
                 if (FD_ISSET(fds[i], &readfds)) {
                     int n = read(fds[i], &move, 1);
                     if (n <= 0) {
-                        // EOF → jugador bloqueado
-                        state_ptr->players[i].blocked = 1;
+                        // EOF → jugador bloqueado, close es en EOF
+                        state_ptr->players[i].blocked = true;
                     } else {
                         // Bloquear estado para aplicar movimiento
                         sem_wait(&sync_ptr->sem_master_starvation);
                         sem_wait(&sync_ptr->sem_state_lock);
 
-                        if (is_valid_movement(move, state_ptr, i)) {
-                            apply_movement(move, state_ptr, i);
+                        if (is_valid_movement(move, i)) {
+                            apply_movement(move, i);
+                            state_ptr->players[i].valid_move++;
+                            last_valid_request = time(NULL); // reinicia el reloj
                         } else {
                             state_ptr->players[i].invalid_move++;
                         }
@@ -447,62 +372,25 @@ int main(int argc, char *argv[]) {
         // Delay entre actualizaciones
         usleep(delay * 1000);
     }
-
-
-    /*
-    
-    
-        void master_tick_select(ZZZ *z,  
-        void *state,
-                        int player_count, int ready_rd[]) {
-    static int rr = 0;
-    int id = rr; rr = (rr + 1) % player_count;
-
-    // 1) Permiso por semáforo (máster -> jugador)
-    sem_post(&z->G[id]);
-
-    // 2) Esperar su notificación con select()
-    fd_set rset; FD_ZERO(&rset);
-    FD_SET(ready_rd[id], &rset);
-    int maxfd = ready_rd[id];
-
-    if (select(maxfd+1, &rset, NULL, NULL, NULL) > 0 &&
-        FD_ISSET(ready_rd[id], &rset)) {
-        uint8_t sink;
-        // drenar 1+ bytes si hubiera burst
-        while (read(ready_rd[id], &sink, 1) == 1) {  break; }
-
-        // 3) Aplicar movimiento con lock de ESCRITOR (C/D)
-        sem_wait(&z->C);
-        sem_wait(&z->D);
-
-        Move mv = z->inbox[id];
-        // apply_move(state, id, mv);
-
-        sem_post(&z->D);
-        sem_post(&z->C);
-
-        // 4) Notificar a la vista (A/B)
-        sem_post(&z->A);
-        sem_wait(&z->B);
-    }
-}
-    
-    
-    
-    */
     
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
 
 
-    /*
+    
     // Esperar a que todos los hijos (jugadores más vista) terminen
-    int children = state->player_count + (view!=NULL ? 1 : 0);
+    int children = state_ptr->player_count + (view!=NULL ? 1 : 0);
     for (int i = 0; i < children; i++) {
         pid_t wpid = waitpid(-1, &status, 0);
-    }*/
+        if (wpid > 0) {
+            if (WIFEXITED(status)) {
+                printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
+            } else {
+                printf("Padre: hijo %d terminó de forma anormal\n", wpid);
+            }
+        }
+    }
 
-    //printf("Padre: todos los hijos terminaron, fin del programa.\n");
+    printf("Padre: todos los hijos terminaron, fin del programa.\n");
     return 0;
 }

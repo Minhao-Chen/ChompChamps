@@ -13,6 +13,7 @@
 #define MAX_HEIGHT 50
 #define MAX_LENGHT_NAME 16
 #define MAX_PLAYERS 9
+#define NMOVS 8
 
 typedef struct { 
     char name[MAX_LENGHT_NAME]; 
@@ -42,5 +43,16 @@ typedef struct {
     unsigned int reader_activated; // Cantidad de jugadores leyendo
     sem_t sem_players[9]; // Semáforos por jugador
 } synchronization;
+
+static const int movs[NMOVS][2] = {
+    { 0,  -1}, // Norte
+    { 1,  -1}, // Noreste
+    { 1,  0}, // Este
+    { 1,  1}, // Sudeste
+    { 0,  1}, // Sur
+    { -1, 1}, // Suroeste
+    { -1, 0}, // Oeste
+    { -1, -1}  // Noroeste
+};
 
 #endif
