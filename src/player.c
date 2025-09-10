@@ -41,15 +41,10 @@ bool adentro(int w, int h, player * p, int x, int y){
 }
 
 
-
-
-
-
-
 int main(int argc, char *argv[]) {
     int width = atoi(argv[1]);
     int height = atoi(argv[2]);
-    int player_id = atoi(argv[3]);
+    //int player_id = atoi(argv[3]);
 
     state_ptr = connect_shm_state(width, height);
     if (state_ptr == NULL) { perror("connect_shm_state"); exit(1); }
@@ -58,30 +53,37 @@ int main(int argc, char *argv[]) {
     if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
     
-
     while (1) {
-        player_wait_turn(sync_ptr, player_id);
+        player_wait_turn(sync_ptr,0 /*player_id*/);
 
         if (!state_ptr->active_game) {
             break;
         }
+        sem_wait(&sync_ptr->sem_master_starvation);
         //lock_writer(sync_ptr);     // turnstile (paso breve)
         lock_reader(sync_ptr);
+        sem_post(&sync_ptr->sem_master_starvation);
         //unlock_writer(sync_ptr);     // liberar turnstile rápido
 
         if (!state_ptr->active_game) {
             unlock_reader(sync_ptr);
             break;
         }
-        movement(state_ptr->width, state_ptr->height, &state_ptr->players[player_id]);
+ 
+        // ... lee el tablero ...
+        //  copiarlo
+        unlock_reader(sync_ptr);
+
+        
+
+        
+        movement(state_ptr->width, state_ptr->height, &state_ptr->players[0/*player_id*/]);
         //sem_wait(&sync_ptr->sem_state_lock);
         // ... lee el tablero ...
         //sem_post(&sync_ptr->sem_state_lock);
-
-
-        unlock_reader(sync_ptr);
     }
 
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
+    return 0;
 }

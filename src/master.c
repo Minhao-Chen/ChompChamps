@@ -213,21 +213,7 @@ void apply_movement(unsigned char move, int id){
     
 }
 
-
-int main(int argc, char *argv[]) {
-
-    gameState state = parse_arguments(argc, argv);
-
-    if (seed == 0){
-        seed = (unsigned int)time(NULL);
-    }
-    
-    srand(seed);
-    
-    createGameState(state);
-    createSync(state_ptr->player_count);
-
-    // Imprimir en el formato solicitado
+void print_arguments(){
     printf("width: %u\n", state_ptr->width);
     printf("height: %u\n", state_ptr->height);
     printf("delay: %u\n", delay);
@@ -240,37 +226,38 @@ int main(int argc, char *argv[]) {
         printf("  %s\n", state_ptr->players[i].name);
     }
 
+}
 
-    int status;
-    char arg_w[16], arg_h[16], num_player[16]; // ver bien esto..., se pasan como strings...
-    sprintf(arg_w, "%d", state_ptr->width);
-    sprintf(arg_h, "%d", state_ptr->height);
-
-    //Crear la vista
+static pid_t fork_view(const char* width, const char* height){
     pid_t pid = fork();
-
     if (pid < 0) {
+        // Error al hacer fork: conviene no matar todo acá,
+        // sino devolver un error al main.
         perror("fork");
-        exit(1);
+        return -1; 
     }
     if (pid == 0) {
         // vista
-        execl(view, "vista", arg_w, arg_h, NULL);
+        execl(view, "vista", width, height, NULL);
         perror("execl view");
-        exit(1);
+        _exit(1);
     }
 
-    
-    int N = state_ptr->player_count;
-    int pipes[N][2]; // te abre pipe para cada jugador
-    int fds[N]; // solo los read-ends para el select
-    for (int i = 0; i < N; i++) {
+    return pid;
+}
+
+static void fork_players(int player_count, int ** pipes, int * fds, const char* width, const char* height){
+    char num_player[16];
+    for (int i = 0; i < player_count; i++) {
         if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
+
         pid_t pid = fork();
+
         if (pid < 0) {
             perror("fork");
             exit(1);
         }
+
         if (pid == 0) {
                // jugador
             close(pipes[i][0]);
@@ -280,9 +267,9 @@ int main(int argc, char *argv[]) {
             sprintf(num_player, "%d", i);
 
 
-            execl(state_ptr->players[i].name, "jugador", arg_w, arg_h, num_player, NULL); //le pondria la i ahi, para saber q numero de jugador es
+            execl(state_ptr->players[i].name, "jugador", width, height, num_player, NULL);
             perror("execl jugador");
-            exit(1);
+            _exit(1);
         } else {
             // master
             close(pipes[i][1]);
@@ -291,6 +278,41 @@ int main(int argc, char *argv[]) {
             printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
         }
     }
+}
+
+
+int main(int argc, char *argv[]) {
+    gameState state = parse_arguments(argc, argv);
+
+    if (seed == 0){
+        seed = (unsigned int)time(NULL);
+    }
+    srand(seed);
+    
+    createGameState(state);
+    createSync(state_ptr->player_count);
+
+    print_arguments();
+
+    int status;
+    char arg_w[16], arg_h[16];
+    sprintf(arg_w, "%d", state_ptr->width);
+    sprintf(arg_h, "%d", state_ptr->height);
+
+    //Crear la vista
+    pid_t pid = fork_view(arg_w, arg_h);
+
+    if (pid<0){
+        perror("execl view");
+        exit(1);
+    }
+   
+    int N = state_ptr->player_count;
+    int pipes[N][2]; // te abre pipe para cada jugador
+    int fds[N]; // solo los read-ends para el select
+
+    fork_players(N, &pipes, &fds, arg_w, arg_h);
+
 
     fd_set readfds;
     unsigned char move;
@@ -315,7 +337,6 @@ int main(int argc, char *argv[]) {
             state_ptr->active_game = false;
             break;
         }
-
 
         FD_ZERO(&readfds);
 
@@ -351,6 +372,7 @@ int main(int argc, char *argv[]) {
                             last_valid_request = time(NULL); // reinicia el reloj
                         } else {
                             state_ptr->players[i].invalid_move++;
+                            last_valid_request = time(NULL); // reinicia el reloj
                         }
 
                         unlock_writer(sync_ptr);
@@ -368,15 +390,15 @@ int main(int argc, char *argv[]) {
         master_wait_view(sync_ptr);
 
         // Delay entre actualizaciones
-        usleep(delay * 1000);
+        usleep(delay);
     }
     
-    lock_writer(sync_ptr);
-    state_ptr->active_game = false;
-    unlock_writer(sync_ptr);
+    //lock_writer(sync_ptr);
+    //state_ptr->active_game = false;
+    //unlock_writer(sync_ptr);
 
-    master_notify_view(sync_ptr);
-    master_wait_view(sync_ptr);
+    //master_notify_view(sync_ptr);
+    //master_wait_view(sync_ptr);
 
     
     // Esperar a que todos los hijos (jugadores más vista) terminen

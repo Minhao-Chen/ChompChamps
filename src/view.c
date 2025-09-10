@@ -15,18 +15,17 @@ synchronization* sync_ptr;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
-void render_board(gameState * state) {
-    //player_poistion();
+void render_board(){    //player_poistion();
 
-    for (int y = 0; y < state->height; y++) {
-        for (int x = 0; x < state->width; x++) {
-            int cell = state->board[y * state->width + x];
+    for (int y = 0; y < state_ptr->height; y++) {
+        for (int x = 0; x < state_ptr->width; x++) {
+            int cell = state_ptr->board[y * state_ptr->width + x];
             int printed = 0;  // flag para saber si imprimimos algo
 
             // ¿Hay un jugador en esta celda?
-            for (int i = 0; i < state->player_count; i++) {
-                if (y == state->players[i].pos_y && x == state->players[i].pos_x) {
-                    printf("P ");
+            for (int i = 0; i < state_ptr->player_count; i++) {
+                if (y == state_ptr->players[i].pos_y && x == state_ptr->players[i].pos_x) {
+                    printf("  P%d ", i);
                     printed = 1;
                     break; // ya encontramos un jugador, no hace falta seguir
                 }
@@ -34,7 +33,7 @@ void render_board(gameState * state) {
 
             // Si no había jugador, imprimimos la celda
             if (!printed) {
-                printf(" %d ", cell);   // recompensa
+                printf("  %2d  ", cell);   // recompensa
             
             }
         }
@@ -77,7 +76,7 @@ int main(int argc, char *argv[]) {
     if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
 
-    while (1){
+   while (1){
         view_wait_changes(sync_ptr);
         //printf("\033[H\033[2J");
         if (state_ptr == NULL || sync_ptr == NULL) {
@@ -88,11 +87,11 @@ int main(int argc, char *argv[]) {
             break;
         }
         
-        render_board(state_ptr);
-        render_players(state_ptr);
+        render_board();
+        render_players();
         view_notify_print(sync_ptr);
     }
-
+    
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
 

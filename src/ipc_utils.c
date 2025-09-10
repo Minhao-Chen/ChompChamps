@@ -66,7 +66,7 @@ synchronization* create_shm_sync(int num_players){
         return NULL;
     }
     for(int i = 0; i < num_players; i++){
-        if(sem_init(&sync->sem_players[i], 1, 1) == -1){
+        if(sem_init(&sync->sem_players[i], 1, 0) == -1){
             perror("sem_init player");
             for(int j = 0; j <i; j++){
                 sem_destroy(&sync->sem_players[j]);
@@ -81,7 +81,7 @@ synchronization* create_shm_sync(int num_players){
 }
 
 static void * connect_shm(const char * mem_name, size_t mem_size){
-    int shm_fd = shm_open(mem_name, O_RDWR, 0);
+    int shm_fd = shm_open(mem_name, O_RDONLY, 0);
 
     if (shm_fd == -1){
         char error_msg[256];
@@ -90,7 +90,7 @@ static void * connect_shm(const char * mem_name, size_t mem_size){
         return NULL;
     }
 
-    void  * shm = mmap(NULL, mem_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    void  * shm = mmap(NULL, mem_size, PROT_READ, MAP_SHARED, shm_fd, 0);
     if(shm == MAP_FAILED){
         char error_msg[256];
         snprintf(error_msg, sizeof(error_msg), "mmap connect %s", mem_name);
