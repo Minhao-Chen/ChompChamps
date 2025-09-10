@@ -167,7 +167,7 @@ void createGameState (gameState state){
 }
 
 void createSync (int player_count){
-    sync_ptr = creat_shm_sync(player_count);
+    sync_ptr = create_shm_sync(player_count);
     if(sync_ptr == NULL){
         fprintf(stderr, "Error creando shared memeory del semaforo");
         exit(EXIT_FAILURE);

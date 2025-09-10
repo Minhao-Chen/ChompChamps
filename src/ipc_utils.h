@@ -10,13 +10,17 @@
 
 // Funciones que manejan las memorias compartidas
 gameState* create_shm_state(int width, int height);
-synchronization* creat_shm_sync(int num_players);
+synchronization* create_shm_sync(int num_players);
+
+gameState* connect_shm_state(int width, int height);
+synchronization* connect_shm_sync();
+
+int close_shm_state(gameState* state) ;
+int close_shm_sync(synchronization* sync);
+
 int destroy_shm_state(gameState* state);
 int destroy_shm_sync(synchronization* sync, int num_players);
-gameState* connect_shm_state();
-synchronization* connect_shm_sync();
-int close_shm_state(gameState* state);
-int close_shm_sync(synchronization* sync);
+
 
 // Funciones de sincronización
 void lock_writer(synchronization* sync);

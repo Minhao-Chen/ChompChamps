@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     int height = atoi(argv[2]);
     int player_id = atoi(argv[3]);
 
-    state_ptr = connect_shm_state();
+    state_ptr = connect_shm_state(width, height);
     if (state_ptr == NULL) { perror("connect_shm_state"); exit(1); }
 
     sync_ptr = connect_shm_sync();
