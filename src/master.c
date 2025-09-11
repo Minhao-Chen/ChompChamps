@@ -149,7 +149,7 @@ void createGameState (gameState state){
     state_ptr->width = state.width;
     state_ptr->height = state.height;
     state_ptr->player_count = state.player_count;
-    state_ptr->game_ended = true;
+    state_ptr->game_ended = false;
     for (int i = 0; i < state.player_count; i++) {
         memset(state_ptr->players[i].name, 0, MAX_LENGHT_NAME);
         for (int j = 0; state.players[i].name[j]!=0; j++){
@@ -245,8 +245,7 @@ static pid_t fork_view(const char* width, const char* height){
 
     return pid;
 }
-
-static void fork_players(int player_count, int ** pipes, int * fds, const char* width, const char* height){
+static void fork_players(int player_count, int pipes[][2], int fds[], const char *width, const char *height){
     char num_player[16];
     for (int i = 0; i < player_count; i++) {
         if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
@@ -260,9 +259,13 @@ static void fork_players(int player_count, int ** pipes, int * fds, const char* 
 
         if (pid == 0) {
                // jugador
-            close(pipes[i][0]);
+            for (int j = 0; j <= i; j++) {
+                close(pipes[j][0]);
+                if (j != i) close(pipes[j][1]);
+            }
             dup2(pipes[i][1], STDOUT_FILENO); // redirijo stdout → pipe
             close(pipes[i][1]); // cierro el original, ya no lo necesito
+
             
             sprintf(num_player, "%d", i);
 
@@ -294,7 +297,6 @@ int main(int argc, char *argv[]) {
 
     print_arguments();
 
-    int status;
     char arg_w[16], arg_h[16];
     sprintf(arg_w, "%d", state_ptr->width);
     sprintf(arg_h, "%d", state_ptr->height);
@@ -311,39 +313,39 @@ int main(int argc, char *argv[]) {
     int pipes[N][2]; // te abre pipe para cada jugador
     int fds[N]; // solo los read-ends para el select
 
-    fork_players(N, &pipes, &fds, arg_w, arg_h);
+    fork_players(N, pipes, fds, arg_w, arg_h);
 
 
     fd_set readfds;
     unsigned char move;
-    int maxfd = 0;
-
-    
-
-    // Habilitamos a todos los jugadores al inicio
-    for (int i = 0; i < N; i++) {
-        master_release_player(sync_ptr, i);
-        if (fds[i] > maxfd) maxfd = fds[i];
-    }
+    int maxfd, id_roundrobin=0;
 
     time_t last_valid_request = time(NULL);
 
     // Bucle principal
-    while (state_ptr->game_ended) {
+    while (!state_ptr->game_ended) {
         // Revisar si superó timeout desde la última solicitud válida
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
             printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
-            state_ptr->game_ended = false;
+            state_ptr->game_ended = true;
             break;
         }
 
         FD_ZERO(&readfds);
-
+        maxfd = -1;
         // Agregamos todos los pipes de los jugadores
         for (int i = 0; i < N; i++) {
             FD_SET(fds[i], &readfds);
+            if (fds[i]>maxfd){
+                maxfd=fds[i];
+            } 
         }
+
+        if (maxfd < 0) {                    // no queda ningún jugador emitiendo
+            state_ptr->game_ended = true;
+            break;
+        } 
 
         // Timeout opcional (1s)
         struct timeval tv;
@@ -356,23 +358,24 @@ int main(int argc, char *argv[]) {
             perror("select");
             exit(1);
         } else if (ready > 0){
-            for (int i = 0; i < N; i++) {
-                if (FD_ISSET(fds[i], &readfds)) {
-                    int n = read(fds[i], &move, 1);
+            for (int i = 0; i < N; i++, id_roundrobin=(id_roundrobin+1)%N) {
+                if (fds[id_roundrobin] >= 0 && FD_ISSET(fds[id_roundrobin], &readfds)) {
+                    int n = read(fds[id_roundrobin], &move, 1);
                     if (n <= 0) {
                         // EOF → jugador bloqueado, close es en EOF
                         state_ptr->players[i].blocked = true;
+                        close(fds[id_roundrobin]); //? creo q va asi
+                        fds[id_roundrobin] = -1; 
                     } else {
                         // Bloquear estado para aplicar movimiento
                         lock_writer(sync_ptr);
 
-                        if (is_valid_movement(move, i)) {
-                            apply_movement(move, i);
-                            state_ptr->players[i].valid_move++;
+                        if (is_valid_movement(move, id_roundrobin)) {
+                            apply_movement(move, id_roundrobin);
+                            state_ptr->players[id_roundrobin].valid_move++;
                             last_valid_request = time(NULL); // reinicia el reloj
                         } else {
-                            state_ptr->players[i].invalid_move++;
-                            last_valid_request = time(NULL); // reinicia el reloj
+                            state_ptr->players[id_roundrobin].invalid_move++;
                         }
 
                         unlock_writer(sync_ptr);
@@ -380,7 +383,7 @@ int main(int argc, char *argv[]) {
                     }
 
                     // Habilitar de nuevo al jugador
-                    master_release_player(sync_ptr, i);
+                    master_release_player(sync_ptr, id_roundrobin);
                 }
             }
         }
@@ -389,18 +392,15 @@ int main(int argc, char *argv[]) {
         master_notify_view(sync_ptr);
         master_wait_view(sync_ptr);
 
+
         // Delay entre actualizaciones
-        usleep(delay);
+        usleep(delay * 1000u);
     }
-    
-    //lock_writer(sync_ptr);
-    //state_ptr->game_ended = false;
-    //unlock_writer(sync_ptr);
 
-    //master_notify_view(sync_ptr);
-    //master_wait_view(sync_ptr);
+    master_notify_view(sync_ptr);
+    master_wait_view(sync_ptr);
 
-    
+    int status;
     // Esperar a que todos los hijos (jugadores más vista) terminen
     int children = state_ptr->player_count + (view!=NULL ? 1 : 0);
     for (int i = 0; i < children; i++) {

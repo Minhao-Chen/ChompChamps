@@ -10,14 +10,16 @@ gameState * state_ptr;
 synchronization * sync_ptr;
 
 bool adentro(int w, int h, player * p, int x, int y);
-void movement(int w, int h, player * p);
+int movement(int w, int h, int player_id);
 
 
-void movement(int w, int h, player * p){ // basicamente agarra el puntaje mas alto nada mas
+int movement(int w, int h, int player_id){ // basicamente agarra el puntaje mas alto nada mas
+    player * p = &state_ptr->players[player_id];
+
     int max = 0;
     char m = NMOVS;
     int next_pos;
-    for(int i=0; i < NMOVS; i++){ // sacar el 8 y ponerlo con define o macro
+    for(int i=0; i < NMOVS; i++){ 
         if(adentro(w,h,p, movs[i][0], movs[i][1])){
             next_pos = (p->pos_y + movs[i][1]) * w + p->pos_x + movs[i][0];
             if(state_ptr->board[next_pos] > max){
@@ -29,11 +31,10 @@ void movement(int w, int h, player * p){ // basicamente agarra el puntaje mas al
     
     if(m<NMOVS){
         write(STDOUT_FILENO, &m,  1);
-    }else{
-        close(STDOUT_FILENO);
+        return 0;
     }
-    
 
+    return -1;
 }
 
 bool adentro(int w, int h, player * p, int x, int y){
@@ -73,7 +74,9 @@ int main(int argc, char *argv[]) {
     sync_ptr = connect_shm_sync();
     if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
+    lock_reader(sync_ptr);
     int my_id = get_id();
+    unlock_reader(sync_ptr);
 
     
     while (1) { 
@@ -93,16 +96,15 @@ int main(int argc, char *argv[]) {
         }
  
         // ... lee el tablero ...
+        if(movement(width, height, my_id)<0){
+            close(STDOUT_FILENO);
+            unlock_reader(sync_ptr);
+            break;
+        }
+
         //  copiarlo
         unlock_reader(sync_ptr);
-
-        char m=2;
-
-        write(STDOUT_FILENO, &m,  1);
-
         
-        //movement(state_ptr->width, state_ptr->height, &state_ptr->players[player_id]);
-
     }
 
     close_shm_sync(sync_ptr);

@@ -66,10 +66,10 @@ synchronization* create_shm_sync(int num_players){
         return NULL;
     }
     for(int i = 0; i < num_players; i++){
-        if(sem_init(&sync->players_mutex[i], 1, 0) == -1){
+        if(sem_init(&sync->players_can_move_mutex[i], 1, 1) == -1){
             perror("sem_init player");
             for(int j = 0; j <i; j++){
-                sem_destroy(&sync->players_mutex[j]);
+                sem_destroy(&sync->players_can_move_mutex[j]);
             }
             return NULL;
         }
@@ -188,7 +188,7 @@ int destroy_shm_sync(synchronization* sync, int num_players){
 
     if (sync != MAP_FAILED){
         for (int i = 0; i < num_players; i++) {
-            if (sem_destroy(&sync->players_mutex[i]) == -1) {
+            if (sem_destroy(&sync->players_can_move_mutex[i]) == -1) {
                 perror("sem_destroy player");
                 result = -1;
             }
@@ -260,13 +260,13 @@ void unlock_reader(synchronization* sync){
 
 void player_wait_turn(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_wait(&sync->players_mutex[player_id]);
+        sem_wait(&sync->players_can_move_mutex[player_id]);
     }
 }
 
 void master_release_player(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_post(&sync->players_mutex[player_id]);
+        sem_post(&sync->players_can_move_mutex[player_id]);
     }
 }
 

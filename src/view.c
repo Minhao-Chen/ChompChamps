@@ -25,7 +25,7 @@ void render_board(){    //player_poistion();
             // ¿Hay un jugador en esta celda?
             for (int i = 0; i < state_ptr->player_count; i++) {
                 if (y == state_ptr->players[i].pos_y && x == state_ptr->players[i].pos_x) {
-                    printf("  P%d ", i);
+                    printf("  P%d  ", i);
                     printed = 1;
                     break; // ya encontramos un jugador, no hace falta seguir
                 }
@@ -61,9 +61,6 @@ void update_board_random() {
 }
 
 int main(int argc, char *argv[]) {
-    printf("VIEW: hola!\n");
-   // fflush(stdout); // para q se vea con el flush
-
     int width = atoi(argv[1]);
     int height = atoi(argv[2]);
 
@@ -78,23 +75,22 @@ int main(int argc, char *argv[]) {
 
    while (1){
         view_wait_changes(sync_ptr);
-        //printf("\033[H\033[2J");
         if (state_ptr == NULL || sync_ptr == NULL) {
             break;
         }
         (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
-        if (!state_ptr->game_ended){
-            break;
-        }
-        
         render_board();
         render_players();
+        if (state_ptr->game_ended){
+            break;
+        }
         view_notify_print(sync_ptr);
     }
     
+    view_notify_print(sync_ptr);
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
 
-    printf("\n\nSimulacion terminada.\n");
+    printf("\nSimulacion terminada.\n");
     return 0;
 }
