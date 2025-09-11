@@ -214,6 +214,7 @@ void apply_movement(unsigned char move, int id){
 }
 
 void print_arguments(){
+    (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
     printf("width: %u\n", state_ptr->width);
     printf("height: %u\n", state_ptr->height);
     printf("delay: %u\n", delay);
@@ -245,8 +246,8 @@ static pid_t fork_view(const char* width, const char* height){
 
     return pid;
 }
-static void fork_players(int player_count, int pipes[][2], int fds[], const char *width, const char *height){
-    char num_player[16];
+
+/*static void fork_players(int player_count, int pipes[][2], int fds[], const char *width, const char *height){
     for (int i = 0; i < player_count; i++) {
         if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
 
@@ -263,20 +264,66 @@ static void fork_players(int player_count, int pipes[][2], int fds[], const char
                 close(pipes[j][0]);
                 if (j != i) close(pipes[j][1]);
             }
-            dup2(pipes[i][1], STDOUT_FILENO); // redirijo stdout → pipe
+            if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
+                 perror("dup2");
+                _exit(1);
+            } // redirijo stdout → pipe
             close(pipes[i][1]); // cierro el original, ya no lo necesito
 
-            
-            sprintf(num_player, "%d", i);
-
-
-            execl(state_ptr->players[i].name, "jugador", width, height, num_player, NULL);
+            execl(state_ptr->players[i].name, "jugador", width, height, NULL);
             perror("execl jugador");
             _exit(1);
         } else {
             // master
             close(pipes[i][1]);
             fds[i] = pipes[i][0];            // guardo el read-end para select
+            state_ptr->players[i].pid = pid;
+            printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
+        }
+    }
+}*/
+
+
+static void fork_players(int player_count, int pipes[][2], int fds[],
+                         const char *width, const char *height)
+{
+    // 1) Inicializar
+    for (int i = 0; i < player_count; i++) {
+        pipes[i][0] = pipes[i][1] = -1;
+        fds[i] = -1;
+    }
+
+    for (int i = 0; i < player_count; i++) {
+        if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
+
+        pid_t pid = fork();
+        if (pid < 0) { perror("fork"); exit(1); }
+
+        if (pid == 0) {
+            // ===== Hijo (jugador i) =====
+            // 2) Cerrar todo lo heredado que no necesito (validando)
+            for (int j = 0; j <= i; j++) {
+                if (pipes[j][0] >= 0) { close(pipes[j][0]); pipes[j][0] = -1; }
+                if (j != i && pipes[j][1] >= 0) { close(pipes[j][1]); pipes[j][1] = -1; }
+            }
+
+            // 3) Redirigir stdout → write-end propio
+            if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
+                perror("dup2");
+                _exit(1);
+            }
+            if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
+
+            // 4) Ejecutar jugador
+            execl(state_ptr->players[i].name, "jugador", width, height, NULL);
+            perror("execl jugador");
+            _exit(1);
+        } else {
+            // ===== Padre (master) =====
+            // 5) Cierra su write-end y lo marca
+            if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
+
+            fds[i] = pipes[i][0];                 // read-end para select
             state_ptr->players[i].pid = pid;
             printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
         }
@@ -302,11 +349,13 @@ int main(int argc, char *argv[]) {
     sprintf(arg_h, "%d", state_ptr->height);
 
     //Crear la vista
-    pid_t pid = fork_view(arg_w, arg_h);
-
-    if (pid<0){
-        perror("execl view");
-        exit(1);
+    if(view!=NULL){
+        pid_t pid = fork_view(arg_w, arg_h);
+        
+        if (pid<0){
+            perror("execl view");
+            exit(1);
+        }
     }
    
     int N = state_ptr->player_count;
@@ -388,17 +437,23 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // Notificar a la vista
-        master_notify_view(sync_ptr);
-        master_wait_view(sync_ptr);
+        if (view!=NULL){
+            // Notificar a la vista
+            master_notify_view(sync_ptr);
+            master_wait_view(sync_ptr);
+        }
+
 
 
         // Delay entre actualizaciones
         usleep(delay * 1000u);
     }
 
-    master_notify_view(sync_ptr);
-    master_wait_view(sync_ptr);
+    if (view!=NULL){
+        // Notificar a la vista
+        master_notify_view(sync_ptr);
+        master_wait_view(sync_ptr);
+    }
 
     int status;
     // Esperar a que todos los hijos (jugadores más vista) terminen

@@ -28,7 +28,7 @@ int movement(int w, int h, int player_id){ // basicamente agarra el puntaje mas 
             }
         }
     }
-    
+    //m=2;
     if(m<NMOVS){
         write(STDOUT_FILENO, &m,  1);
         return 0;
@@ -107,6 +107,7 @@ int main(int argc, char *argv[]) {
         
     }
 
+    sleep(30);
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
     return 0;

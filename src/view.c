@@ -15,7 +15,7 @@ synchronization* sync_ptr;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
-void render_board(){    //player_poistion();
+void render_board(){
 
     for (int y = 0; y < state_ptr->height; y++) {
         for (int x = 0; x < state_ptr->width; x++) {
@@ -78,7 +78,9 @@ int main(int argc, char *argv[]) {
         if (state_ptr == NULL || sync_ptr == NULL) {
             break;
         }
+
         (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
+        
         render_board();
         render_players();
         if (state_ptr->game_ended){
