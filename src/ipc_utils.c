@@ -80,8 +80,8 @@ synchronization* create_shm_sync(int num_players){
     return sync;
 }
 
-static void * connect_shm(const char * mem_name, size_t mem_size){
-    int shm_fd = shm_open(mem_name, O_RDONLY, 0);
+static void * connect_shm(const char * mem_name, int oflag, int prot, size_t mem_size){
+    int shm_fd = shm_open(mem_name, oflag, 0);
 
     if (shm_fd == -1){
         char error_msg[256];
@@ -90,7 +90,7 @@ static void * connect_shm(const char * mem_name, size_t mem_size){
         return NULL;
     }
 
-    void  * shm = mmap(NULL, mem_size, PROT_READ, MAP_SHARED, shm_fd, 0);
+    void  * shm = mmap(NULL, mem_size, prot, MAP_SHARED, shm_fd, 0);
     if(shm == MAP_FAILED){
         char error_msg[256];
         snprintf(error_msg, sizeof(error_msg), "mmap connect %s", mem_name);
@@ -108,12 +108,12 @@ static void * connect_shm(const char * mem_name, size_t mem_size){
 gameState* connect_shm_state(int width, int height){
     size_t gameState_size = get_state_size(width, height);
 
-    return (gameState*) connect_shm(SHM_STATE, gameState_size);
+    return (gameState*) connect_shm(SHM_STATE, O_RDONLY, PROT_READ, gameState_size);
 }
 
 // Conectar a memoria compartida de sincronización (para vista y jugadores)
 synchronization* connect_shm_sync() {
-    return (synchronization*) connect_shm(SHM_SYNC, sizeof(synchronization));
+    return (synchronization*) connect_shm(SHM_SYNC, O_RDWR, PROT_READ | PROT_WRITE, sizeof(synchronization));
 }
 
 static int close_shm(void * shm, const char * mem_name, size_t mem_size){

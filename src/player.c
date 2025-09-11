@@ -44,7 +44,6 @@ bool adentro(int w, int h, player * p, int x, int y){
 int main(int argc, char *argv[]) {
     int width = atoi(argv[1]);
     int height = atoi(argv[2]);
-    //int player_id = atoi(argv[3]);
 
     state_ptr = connect_shm_state(width, height);
     if (state_ptr == NULL) { perror("connect_shm_state"); exit(1); }
@@ -52,10 +51,36 @@ int main(int argc, char *argv[]) {
     sync_ptr = connect_shm_sync();
     if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
-    
-    while (1) {
-        player_wait_turn(sync_ptr,0 /*player_id*/);
+    /*int shm_fd = shm_open(SHM_SYNC, O_RDWR, 0);
 
+    if (shm_fd == -1){
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "shm_open connect %s", SHM_SYNC);
+        perror(error_msg);
+        return 1;
+    }
+
+    synchronization  * shm = mmap(NULL, sizeof(synchronization), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if(shm == MAP_FAILED){
+        char error_msg[256];
+        snprintf(error_msg, sizeof(error_msg), "mmap connect %s", SHM_SYNC);
+        perror(error_msg);
+        close(shm_fd);
+        return 1;
+    }
+
+    close(shm_fd);*/
+
+    
+    //sync_ptr = shm;
+
+    //return shm;
+
+    
+    while (1) { 
+        //sem_wait(&sync_ptr->sem_players[0]);
+        
+        player_wait_turn(sync_ptr, 0); 
         if (!state_ptr->active_game) {
             break;
         }
@@ -74,10 +99,12 @@ int main(int argc, char *argv[]) {
         //  copiarlo
         unlock_reader(sync_ptr);
 
-        
+        char m=2;
+
+        write(STDOUT_FILENO, &m,  1);
 
         
-        movement(state_ptr->width, state_ptr->height, &state_ptr->players[0/*player_id*/]);
+        //movement(state_ptr->width, state_ptr->height, &state_ptr->players[player_id]);
         //sem_wait(&sync_ptr->sem_state_lock);
         // ... lee el tablero ...
         //sem_post(&sync_ptr->sem_state_lock);
