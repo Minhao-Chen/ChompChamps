@@ -60,7 +60,7 @@ gameState parse_arguments(int argc, char *argv[]) {
         .width = DEFAULT_WIDTH,
         .height = DEFAULT_HEIGHT,
         .player_count=0,
-        .active_game=false,
+        .game_ended=false,
     };
 
     for (int i = 0; i < 9; i++) {
@@ -149,7 +149,7 @@ void createGameState (gameState state){
     state_ptr->width = state.width;
     state_ptr->height = state.height;
     state_ptr->player_count = state.player_count;
-    state_ptr->active_game = true;
+    state_ptr->game_ended = true;
     for (int i = 0; i < state.player_count; i++) {
         memset(state_ptr->players[i].name, 0, MAX_LENGHT_NAME);
         for (int j = 0; state.players[i].name[j]!=0; j++){
@@ -329,12 +329,12 @@ int main(int argc, char *argv[]) {
     time_t last_valid_request = time(NULL);
 
     // Bucle principal
-    while (state_ptr->active_game) {
+    while (state_ptr->game_ended) {
         // Revisar si superó timeout desde la última solicitud válida
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
             printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
-            state_ptr->active_game = false;
+            state_ptr->game_ended = false;
             break;
         }
 
@@ -394,7 +394,7 @@ int main(int argc, char *argv[]) {
     }
     
     //lock_writer(sync_ptr);
-    //state_ptr->active_game = false;
+    //state_ptr->game_ended = false;
     //unlock_writer(sync_ptr);
 
     //master_notify_view(sync_ptr);

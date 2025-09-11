@@ -83,7 +83,7 @@ int main(int argc, char *argv[]) {
             break;
         }
         (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
-        if (!state_ptr->active_game){
+        if (!state_ptr->game_ended){
             break;
         }
         

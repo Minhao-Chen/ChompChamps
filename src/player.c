@@ -41,6 +41,28 @@ bool adentro(int w, int h, player * p, int x, int y){
 }
 
 
+int get_id (){
+    pid_t my_pid = getpid();
+    int my_id=-1;
+    
+    for (int i = 0; i < state_ptr->player_count; i++){
+        if (state_ptr->players[i].pid == my_pid) {
+            my_id = i;
+            break;
+        }
+    }
+    
+    if (my_id == -1) {
+        fprintf(stderr, "Error: no encontré mi PID en game_state\n");
+        exit(1);
+    }
+
+    return my_id;
+
+}
+
+
+
 int main(int argc, char *argv[]) {
     int width = atoi(argv[1]);
     int height = atoi(argv[2]);
@@ -51,46 +73,21 @@ int main(int argc, char *argv[]) {
     sync_ptr = connect_shm_sync();
     if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
 
-    /*int shm_fd = shm_open(SHM_SYNC, O_RDWR, 0);
-
-    if (shm_fd == -1){
-        char error_msg[256];
-        snprintf(error_msg, sizeof(error_msg), "shm_open connect %s", SHM_SYNC);
-        perror(error_msg);
-        return 1;
-    }
-
-    synchronization  * shm = mmap(NULL, sizeof(synchronization), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-    if(shm == MAP_FAILED){
-        char error_msg[256];
-        snprintf(error_msg, sizeof(error_msg), "mmap connect %s", SHM_SYNC);
-        perror(error_msg);
-        close(shm_fd);
-        return 1;
-    }
-
-    close(shm_fd);*/
-
-    
-    //sync_ptr = shm;
-
-    //return shm;
+    int my_id = get_id();
 
     
     while (1) { 
-        //sem_wait(&sync_ptr->sem_players[0]);
-        
-        player_wait_turn(sync_ptr, 0); 
-        if (!state_ptr->active_game) {
+        player_wait_turn(sync_ptr, my_id); 
+        if (state_ptr->game_ended) {
             break;
         }
-        sem_wait(&sync_ptr->sem_master_starvation);
-        //lock_writer(sync_ptr);     // turnstile (paso breve)
-        lock_reader(sync_ptr);
-        sem_post(&sync_ptr->sem_master_starvation);
-        //unlock_writer(sync_ptr);     // liberar turnstile rápido
+        sem_wait(&sync_ptr->master_inanition_mutex);
 
-        if (!state_ptr->active_game) {
+        lock_reader(sync_ptr);
+        sem_post(&sync_ptr->master_inanition_mutex);
+
+
+        if (state_ptr->game_ended) {
             unlock_reader(sync_ptr);
             break;
         }
@@ -105,9 +102,7 @@ int main(int argc, char *argv[]) {
 
         
         //movement(state_ptr->width, state_ptr->height, &state_ptr->players[player_id]);
-        //sem_wait(&sync_ptr->sem_state_lock);
-        // ... lee el tablero ...
-        //sem_post(&sync_ptr->sem_state_lock);
+
     }
 
     close_shm_sync(sync_ptr);

@@ -45,37 +45,37 @@ gameState* create_shm_state(int width, int height){
 synchronization* create_shm_sync(int num_players){
     synchronization *sync = (synchronization*) create_shm(SHM_SYNC, sizeof(synchronization));
 
-    if(sem_init(&sync->sem_view_notify, 1, 0) == -1){
+    if(sem_init(&sync->master_notify_view_mutex, 1, 0) == -1){
         perror("sem_init view_notify");
         return NULL;
     }
-    if(sem_init(&sync->sem_view_done, 1, 0) == -1) {
+    if(sem_init(&sync->view_is_done_mutex, 1, 0) == -1) {
         perror("sem_init view_done");
         return NULL;
     }
-    if(sem_init(&sync->sem_master_starvation, 1, 1) == -1) {
+    if(sem_init(&sync->master_inanition_mutex, 1, 1) == -1) {
         perror("sem_init master_starvation");
         return NULL;
     }
-    if(sem_init(&sync->sem_state_lock, 1, 1) == -1) {
+    if(sem_init(&sync->state_lock_mutex, 1, 1) == -1) {
         perror("sem_init state_lock");
         return NULL;
     }
-    if(sem_init(&sync->sem_counter_lock, 1, 1) == -1) {
+    if(sem_init(&sync->reader_count_lock_mutex, 1, 1) == -1) {
         perror("sem_init count_lock");
         return NULL;
     }
     for(int i = 0; i < num_players; i++){
-        if(sem_init(&sync->sem_players[i], 1, 0) == -1){
+        if(sem_init(&sync->players_mutex[i], 1, 0) == -1){
             perror("sem_init player");
             for(int j = 0; j <i; j++){
-                sem_destroy(&sync->sem_players[j]);
+                sem_destroy(&sync->players_mutex[j]);
             }
             return NULL;
         }
     }
 
-    sync->reader_activated = 0;
+    sync->activated_reader_counter = 0;
 
     return sync;
 }
@@ -188,28 +188,28 @@ int destroy_shm_sync(synchronization* sync, int num_players){
 
     if (sync != MAP_FAILED){
         for (int i = 0; i < num_players; i++) {
-            if (sem_destroy(&sync->sem_players[i]) == -1) {
+            if (sem_destroy(&sync->players_mutex[i]) == -1) {
                 perror("sem_destroy player");
                 result = -1;
             }
         }
-        if(sem_destroy(&sync->sem_view_notify) == -1){
+        if(sem_destroy(&sync->master_notify_view_mutex) == -1){
             perror("sem_destroy view_notify");
             result = -1;
         }    
-        if(sem_destroy(&sync->sem_view_done) == -1){
+        if(sem_destroy(&sync->view_is_done_mutex) == -1){
             perror("sem_destroy view_done");
             result = -1;
         }
-        if(sem_destroy(&sync->sem_master_starvation) == -1){
+        if(sem_destroy(&sync->master_inanition_mutex) == -1){
             perror("sem_destroy master_starvation");
             result = -1;
         }
-        if(sem_destroy(&sync->sem_state_lock) == -1){
+        if(sem_destroy(&sync->state_lock_mutex) == -1){
             perror("sem_destroy state_lock");
             result = -1;
         }
-        if(sem_destroy(&sync->sem_counter_lock) == -1){
+        if(sem_destroy(&sync->reader_count_lock_mutex) == -1){
             perror("sem_destroy counter_lock");
             result = -1;
         }
@@ -228,62 +228,62 @@ int destroy_shm_sync(synchronization* sync, int num_players){
 
 void lock_writer(synchronization* sync){
     // Protocolo escritor (evita inanición)
-    sem_wait(&sync->sem_master_starvation);  // C: Evitar inanición
-    sem_wait(&sync->sem_state_lock);        // D: Lock de escritura
+    sem_wait(&sync->master_inanition_mutex);  // C: Evitar inanición
+    sem_wait(&sync->state_lock_mutex);        // D: Lock de escritura
 }
 
 void unlock_writer(synchronization* sync){
-    sem_post(&sync->sem_state_lock);        // D: Liberar lock
-    sem_post(&sync->sem_master_starvation);  // C: Permitir siguiente escritor
+    sem_post(&sync->state_lock_mutex);        // D: Liberar lock
+    sem_post(&sync->master_inanition_mutex);  // C: Permitir siguiente escritor
 }
 
 void lock_reader(synchronization* sync){
     // Protocolo lector
-    sem_wait(&sync->sem_counter_lock);      // E: Lock contador
-    sync->reader_activated++;                // F: Incrementar contador
-    if (sync->reader_activated == 1) {
-        sem_wait(&sync->sem_state_lock);    // D: Primer lector bloquea escritores
+    sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
+    sync->activated_reader_counter++;                // F: Incrementar contador
+    if (sync->activated_reader_counter == 1) {
+        sem_wait(&sync->state_lock_mutex);    // D: Primer lector bloquea escritores
     }
-    sem_post(&sync->sem_counter_lock);      // E: Liberar contador
+    sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
 }
 
 void unlock_reader(synchronization* sync){
-    sem_wait(&sync->sem_counter_lock);      // E: Lock contador
-    sync->reader_activated--;                // F: Decrementar contador
-    if (sync->reader_activated == 0) {
-        sem_post(&sync->sem_state_lock);    // D: Último lector libera escritores
+    sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
+    sync->activated_reader_counter--;                // F: Decrementar contador
+    if (sync->activated_reader_counter == 0) {
+        sem_post(&sync->state_lock_mutex);    // D: Último lector libera escritores
     }
-    sem_post(&sync->sem_counter_lock);      // E: Liberar contador
+    sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
 }
 
 
 
 void player_wait_turn(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_wait(&sync->sem_players[player_id]);
+        sem_wait(&sync->players_mutex[player_id]);
     }
 }
 
 void master_release_player(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){
-        sem_post(&sync->sem_players[player_id]);
+        sem_post(&sync->players_mutex[player_id]);
     }
 }
 
 void view_wait_changes(synchronization *sync){
-    sem_wait(&sync->sem_view_notify);
+    sem_wait(&sync->master_notify_view_mutex);
 }
 
 void view_notify_print(synchronization *sync){
-    sem_post(&sync->sem_view_done);
+    sem_post(&sync->view_is_done_mutex);
 }
 
 void master_notify_view(synchronization *sync){
-    sem_post(&sync->sem_view_notify);
+    sem_post(&sync->master_notify_view_mutex);
 }
 
 void master_wait_view(synchronization *sync){
-    sem_wait(&sync->sem_view_done);
+    sem_wait(&sync->view_is_done_mutex);
 }
 
 int get_state_size(int width, int height){
