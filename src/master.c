@@ -247,42 +247,6 @@ static pid_t fork_view(const char* width, const char* height){
     return pid;
 }
 
-/*static void fork_players(int player_count, int pipes[][2], int fds[], const char *width, const char *height){
-    for (int i = 0; i < player_count; i++) {
-        if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
-
-        pid_t pid = fork();
-
-        if (pid < 0) {
-            perror("fork");
-            exit(1);
-        }
-
-        if (pid == 0) {
-               // jugador
-            for (int j = 0; j <= i; j++) {
-                close(pipes[j][0]);
-                if (j != i) close(pipes[j][1]);
-            }
-            if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
-                 perror("dup2");
-                _exit(1);
-            } // redirijo stdout → pipe
-            close(pipes[i][1]); // cierro el original, ya no lo necesito
-
-            execl(state_ptr->players[i].name, "jugador", width, height, NULL);
-            perror("execl jugador");
-            _exit(1);
-        } else {
-            // master
-            close(pipes[i][1]);
-            fds[i] = pipes[i][0];            // guardo el read-end para select
-            state_ptr->players[i].pid = pid;
-            printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
-        }
-    }
-}*/
-
 
 static void fork_players(int player_count, int pipes[][2], int fds[],
                          const char *width, const char *height)
@@ -377,7 +341,6 @@ int main(int argc, char *argv[]) {
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
             printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
-            state_ptr->game_ended = true;
             break;
         }
 
@@ -392,7 +355,6 @@ int main(int argc, char *argv[]) {
         }
 
         if (maxfd < 0) {                    // no queda ningún jugador emitiendo
-            state_ptr->game_ended = true;
             break;
         } 
 
@@ -447,6 +409,12 @@ int main(int argc, char *argv[]) {
 
         // Delay entre actualizaciones
         usleep(delay * 1000u);
+    }
+
+    state_ptr->game_ended = true;
+    for (int i = 0; i < N; i++){
+        fflush(stdout);
+        master_release_player(sync_ptr, i);
     }
 
     if (view!=NULL){
