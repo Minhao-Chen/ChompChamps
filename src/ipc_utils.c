@@ -240,8 +240,7 @@ void unlock_writer(synchronization* sync){
 void lock_reader(synchronization* sync){
     // Protocolo lector
     sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
-    sync->activated_reader_counter++;                // F: Incrementar contador
-    if (sync->activated_reader_counter == 1) {
+    if (sync->activated_reader_counter++ == 0) {
         sem_wait(&sync->state_lock_mutex);    // D: Primer lector bloquea escritores
     }
     sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
@@ -249,14 +248,11 @@ void lock_reader(synchronization* sync){
 
 void unlock_reader(synchronization* sync){
     sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
-    sync->activated_reader_counter--;                // F: Decrementar contador
-    if (sync->activated_reader_counter == 0) {
+    if (sync->activated_reader_counter-- == 1) {
         sem_post(&sync->state_lock_mutex);    // D: Último lector libera escritores
     }
     sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
 }
-
-
 
 void player_wait_turn(synchronization *sync, int player_id){
     if(player_id >= 0 && player_id < 9){

@@ -79,7 +79,7 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
+        //(void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
         
         render_board();
         render_players();
@@ -92,7 +92,5 @@ int main(int argc, char *argv[]) {
     view_notify_print(sync_ptr);
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
-
-    printf("\nSimulacion terminada.\n");
     return 0;
 }

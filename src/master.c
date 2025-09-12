@@ -295,40 +295,7 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
 }
 
 
-int main(int argc, char *argv[]) {
-    gameState state = parse_arguments(argc, argv);
-
-    if (seed == 0){
-        seed = (unsigned int)time(NULL);
-    }
-    srand(seed);
-    
-    createGameState(state);
-    createSync(state_ptr->player_count);
-
-    print_arguments();
-
-    char arg_w[16], arg_h[16];
-    sprintf(arg_w, "%d", state_ptr->width);
-    sprintf(arg_h, "%d", state_ptr->height);
-
-    //Crear la vista
-    if(view!=NULL){
-        pid_t pid = fork_view(arg_w, arg_h);
-        
-        if (pid<0){
-            perror("execl view");
-            exit(1);
-        }
-    }
-   
-    int N = state_ptr->player_count;
-    int pipes[N][2]; // te abre pipe para cada jugador
-    int fds[N]; // solo los read-ends para el select
-
-    fork_players(N, pipes, fds, arg_w, arg_h);
-
-
+void game_management(int player_count, int fds[]){
     fd_set readfds;
     unsigned char move;
     int maxfd, id_roundrobin=0;
@@ -347,7 +314,7 @@ int main(int argc, char *argv[]) {
         FD_ZERO(&readfds);
         maxfd = -1;
         // Agregamos todos los pipes de los jugadores
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < player_count; i++) {
             FD_SET(fds[i], &readfds);
             if (fds[i]>maxfd){
                 maxfd=fds[i];
@@ -369,7 +336,7 @@ int main(int argc, char *argv[]) {
             perror("select");
             exit(1);
         } else if (ready > 0){
-            for (int i = 0; i < N; i++, id_roundrobin=(id_roundrobin+1)%N) {
+            for (int i = 0; i < player_count; i++, id_roundrobin=(id_roundrobin+1)%player_count) {
                 if (fds[id_roundrobin] >= 0 && FD_ISSET(fds[id_roundrobin], &readfds)) {
                     int n = read(fds[id_roundrobin], &move, 1);
                     if (n <= 0) {
@@ -405,15 +372,50 @@ int main(int argc, char *argv[]) {
             master_wait_view(sync_ptr);
         }
 
-
-
         // Delay entre actualizaciones
         usleep(delay * 1000u);
     }
+}
+
+
+int main(int argc, char *argv[]) {
+    gameState state = parse_arguments(argc, argv);
+
+    if (seed == 0){
+        seed = (unsigned int)time(NULL);
+    }
+    srand(seed);
+    
+    createGameState(state);
+    createSync(state_ptr->player_count);
+
+    print_arguments();
+
+    char arg_w[16], arg_h[16];
+    sprintf(arg_w, "%d", state_ptr->width);
+    sprintf(arg_h, "%d", state_ptr->height);
+
+    pid_t pid_view;
+    //Crear la vista
+    if(view!=NULL){
+        pid_view = fork_view(arg_w, arg_h);
+        
+        if (pid_view<0){
+            perror("execl view");
+            exit(1);
+        }
+    }
+   
+    int N = state_ptr->player_count;
+    int pipes[N][2]; // te abre pipe para cada jugador
+    int fds[N]; // solo los read-ends para el select
+
+    fork_players(N, pipes, fds, arg_w, arg_h);
+
+    game_management(N, fds);
 
     state_ptr->game_ended = true;
     for (int i = 0; i < N; i++){
-        fflush(stdout);
         master_release_player(sync_ptr, i);
     }
 
@@ -424,22 +426,23 @@ int main(int argc, char *argv[]) {
     }
 
     int status;
-    // Esperar a que todos los hijos (jugadores más vista) terminen
-    int children = state_ptr->player_count + (view!=NULL ? 1 : 0);
-    for (int i = 0; i < children; i++) {
-        pid_t wpid = waitpid(-1, &status, 0);
+    pid_t wpid = waitpid(pid_view, &status, 0);
+    if (wpid > 0) {
+        printf("View exited (%d)\n", status);
+    }
+    
+    // Esperar a que todos los players terminen
+    for (int i = 0; i < N; i++) {
+        wpid = waitpid(state_ptr->players[i].pid, &status, 0);
         if (wpid > 0) {
-            if (WIFEXITED(status)) {
-                printf("Padre: hijo %d terminó con exit code %d\n", wpid, WEXITSTATUS(status));
-            } else {
-                printf("Padre: hijo %d terminó de forma anormal\n", wpid);
-            }
+            printf("Player player (%d) exited (%d) with a score of %d / %d / %d\n", i, status, 
+                state_ptr->players[i].score, state_ptr->players[i].valid_move, state_ptr->players[i].invalid_move);
         }
     }
 
     destroy_shm_sync(sync_ptr, state_ptr->player_count);
     destroy_shm_state(state_ptr);
 
-    printf("Padre: todos los hijos terminaron, fin del programa.\n");
+    //printf("Padre: todos los hijos terminaron, fin del programa.\n");
     return 0;
 }

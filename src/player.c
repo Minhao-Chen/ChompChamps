@@ -28,7 +28,7 @@ int movement(int w, int h, int player_id){ // basicamente agarra el puntaje mas 
             }
         }
     }
-    m=2;
+    //m=2;
     if(m<NMOVS){
         write(STDOUT_FILENO, &m,  1);
         return 0;
