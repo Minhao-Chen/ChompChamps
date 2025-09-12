@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <stdlib.h>   // atoi
+#include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
 #include "common.h"
@@ -38,7 +38,7 @@ int movement(int w, int h, int player_id){ // basicamente agarra el puntaje mas 
 }
 
 bool adentro(int w, int h, player * p, int x, int y){
-  return p->pos_y+y >= 0 && p->pos_y+y < h && p->pos_x+x >= 0 && p->pos_x+x < w ? true : false; 
+  return p->pos_y+y >= 0 && p->pos_y+y < h && p->pos_x+x >= 0 && p->pos_x+x < w; 
 }
 
 
@@ -55,6 +55,7 @@ int get_id (){
     
     if (my_id == -1) {
         fprintf(stderr, "Error: no encontré mi PID en game_state\n");
+        unlock_reader(sync_ptr);
         exit(1);
     }
 

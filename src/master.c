@@ -48,6 +48,14 @@ static void start_players() {
     }
 }
 
+static void parse_player(gameState * config_args, const char *name){
+     memset(config_args->players[config_args->player_count].name, 0, MAX_LENGHT_NAME);
+                    for (int i = 0; i < MAX_LENGHT_NAME-1 && name[i]!=0; i++){
+                        config_args->players[config_args->player_count].name[i]=name[i];
+                    }
+                    config_args->players[config_args->player_count].name[MAX_LENGHT_NAME-1] = '\0';
+                    config_args->player_count++;
+}
 
 // Función para parsear parámetros
 gameState parse_arguments(int argc, char *argv[]) {
@@ -98,30 +106,18 @@ gameState parse_arguments(int argc, char *argv[]) {
                 break;
             }
             case 'p': {
-                    if (config_args.player_count < 9) {
-                        memset(config_args.players[config_args.player_count].name, 0, MAX_LENGHT_NAME);
-                        for (int i = 0; i < MAX_LENGHT_NAME-1 && optarg[i]!=0; i++){
-                            config_args.players[config_args.player_count].name[i]=optarg[i];
-                        }
-                        
-
-                        //strncpy(config_args.players[config_args.player_count].name, optarg, MAX_LENGHT_NAME-1);
-                        config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
-                        config_args.player_count++;
+                parse_player(&config_args, optarg);
+                while (optind < argc && argv[optind][0] != '-') {
+                    if(config_args.player_count >= 9){
+                        fprintf(stderr, "Error: At most 9 players can be specified using -p.\n");
+                        exit(EXIT_FAILURE);
                     }
-
-                // Jugadores siguientes
-                while (optind < argc && argv[optind][0] != '-' && config_args.player_count < 9) {
-                    memset(config_args.players[config_args.player_count].name, 0, MAX_LENGHT_NAME);
-                        for (int i = 0; i < MAX_LENGHT_NAME-1 && optarg[i]!=0; i++){
-                            config_args.players[config_args.player_count].name[i]=optarg[i];
-                        }
-                    //strncpy(config_args.players[config_args.player_count].name, argv[optind], MAX_LENGHT_NAME-1);
-                    config_args.players[config_args.player_count].name[MAX_LENGHT_NAME-1] = '\0';
-                    config_args.player_count++;
+                    parse_player(&config_args, argv[optind]);
                     optind++;
                 }
+                
                 break;
+                
             }
             default:
                 fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
@@ -135,6 +131,7 @@ gameState parse_arguments(int argc, char *argv[]) {
     }
     return config_args;
 }
+
 
 void createGameState (gameState state){
 
