@@ -35,13 +35,13 @@ typedef struct {
 } gameState;
 
 typedef struct {
-    sem_t master_notify_view_mutex; // Máster a Vista: hay cambios
-    sem_t view_is_done_mutex; // Vista a Máster: imprimió
-    sem_t master_inanition_mutex; // Mutex para evitar inanición del máster
-    sem_t state_lock_mutex; // Mutex para el estado del juego
-    sem_t reader_count_lock_mutex; // Mutex para la variable reader_activated
-    unsigned int activated_reader_counter; // Cantidad de jugadores leyendo
-    sem_t players_can_move_mutex[9]; // Semáforos por jugador
+    sem_t master_notify_view_mutex; // A: El máster le indica a la vista que hay cambios por imprimir
+    sem_t view_is_done_mutex; // B: La vista le indica al máster que terminó de imprimir
+    sem_t master_inanition_mutex; // C: Mutex para evitar inanición del máster al acceder al estado
+    sem_t state_lock_mutex; // D: Mutex para el estado del juego
+    sem_t reader_count_lock_mutex; // E: Mutex para la variable reader_activated
+    unsigned int activated_reader_counter; // F: Cantidad de jugadores leyendo el estado
+    sem_t players_can_move_mutex[9]; // G: Le indican a cada jugador que puede enviar 1 movimiento
 } synchronization;
 
 static const int movs[NMOVS][2] = {
