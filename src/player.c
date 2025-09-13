@@ -18,35 +18,6 @@ movement_info * movement_info_ptr;
 bool is_valid_move(int width, int height, unsigned short player_x, unsigned short player_y, int diff_x, int diff_y);
 int movement(int width, int height, int player_id);
 
-
-/*int movement(int width, int height, int player_id){ // basicamente agarra el puntaje mas alto nada mas
-    player * p = &state_ptr->players[player_id];
-
-    int max = 0;
-    char m = NMOVS;
-    int next_pos;
-    for(int i=0; i < NMOVS; i++){ 
-        if(adentro(width,height,p, movs[i][0], movs[i][1])){
-            next_pos = (p->pos_y + movs[i][1]) * width + p->pos_x + movs[i][0];
-            if(state_ptr->board[next_pos] > max){
-                max = state_ptr->board[next_pos];
-                m = i;
-            }
-        }
-    }
-    //m=2;
-    if(m<NMOVS){
-        write(STDOUT_FILENO, &m,  1);
-        return 0;
-    }
-
-    return -1;
-}
-
-bool adentro(int width, int height, player * player, int x, int y){
-  return player->pos_y+y >= 0 && player->pos_y+y < height && player->pos_x+x >= 0 && player->pos_x+x < width; 
-}*/
-
 int movement(int width, int height, int player_id){ // basicamente agarra el puntaje mas alto nada mas
     //player * p = &state_ptr->players[player_id];
 
@@ -63,7 +34,7 @@ int movement(int width, int height, int player_id){ // basicamente agarra el pun
             }
         }
     }
-    //m=2;
+    
     if(m<NMOVS){
         write(STDOUT_FILENO, &m,  1);
         return 0;
@@ -90,7 +61,6 @@ int get_id (){
     
     if (my_id < 0) {
         fprintf(stderr, "Error: no encontré mi PID en game_state\n");
-        unlock_reader(sync_ptr);
         return -1;
     }
 
@@ -113,6 +83,7 @@ int inic_local_game_info(int width, int height){
     }
     return 0;
 }
+
 void free_local_game_info(){
     free(movement_info_ptr->board);
     free(movement_info_ptr);

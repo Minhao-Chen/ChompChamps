@@ -273,7 +273,7 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
 
             fds[i] = pipes[i][0];
             state_ptr->players[i].pid = pid;
-            //printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
+            
         }
     }
 }
@@ -289,7 +289,6 @@ void game_management(int player_count, int fds[]){
     while (!state_ptr->game_ended) {
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
-            //printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
             break;
         }
 
@@ -297,10 +296,12 @@ void game_management(int player_count, int fds[]){
         maxfd = -1;
 
         for (int i = 0; i < player_count; i++) {
-            FD_SET(fds[i], &readfds);
-            if (fds[i]>maxfd){
-                maxfd=fds[i];
-            } 
+            if (fds[i] >= 0) {
+                FD_SET(fds[i], &readfds);
+                if (fds[i]>maxfd){
+                    maxfd=fds[i];
+                } 
+            }
         }
 
         if (maxfd < 0) {
@@ -331,6 +332,11 @@ void game_management(int player_count, int fds[]){
                             apply_movement(move, id_roundrobin);
                             state_ptr->players[id_roundrobin].valid_move++;
                             last_valid_request = time(NULL);
+                                if (view!=NULL){
+                                    master_notify_view(sync_ptr);
+                                    master_wait_view(sync_ptr);
+                                    usleep(delay * 1000u);
+                                }
                         } else {
                             state_ptr->players[id_roundrobin].invalid_move++;
                         }
@@ -341,12 +347,6 @@ void game_management(int player_count, int fds[]){
                 }
             }
         }
-        if (view!=NULL){
-            master_notify_view(sync_ptr);
-            master_wait_view(sync_ptr);
-        }
-
-        usleep(delay * 1000u);
     }
 }
 
@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
         destroy_shm_state(state_ptr);
         exit(EXIT_FAILURE);
-    };
+    }
 
     print_arguments();
 
