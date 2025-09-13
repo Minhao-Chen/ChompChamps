@@ -55,10 +55,17 @@ int main(int argc, char *argv[]) {
     srand((unsigned)time(NULL));
 
     state_ptr = connect_shm_state(width,height);
-    if (state_ptr == NULL) { perror("connect_shm_state"); exit(1); }
+    if (state_ptr == NULL) { 
+        perror("connect_shm_state"); 
+        return 1; 
+    }
 
     sync_ptr = connect_shm_sync();
-    if (sync_ptr == NULL) { perror("connect_shm_sync"); exit(1); }
+    if (sync_ptr == NULL) { 
+        perror("connect_shm_sync"); 
+        close_shm_state(state_ptr);
+        return 1; 
+    }
 
 
    while (1){

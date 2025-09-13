@@ -40,6 +40,8 @@ static void start_players() {
             state_ptr->players[i].pos_x = rand() % state_ptr->width;
             state_ptr->players[i].pos_y = rand() % state_ptr->height;
         } while (!is_position_unique(i));
+
+        state_ptr->board[state_ptr->players[i].pos_y * state_ptr->width + state_ptr->players[i].pos_x]=-i;
         
         state_ptr->players[i].pid = 0;
         state_ptr->players[i].blocked = false;
@@ -128,12 +130,11 @@ gameState parse_arguments(int argc, char *argv[]) {
 }
 
 
-void create_game_state (gameState state){
+int create_game_state (gameState state){
     state_ptr = create_shm_state(state.width, state.height);
 
     if (state_ptr == NULL) {
-        fprintf(stderr, "Error: cannot create shared memory for gameState\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     state_ptr->width = state.width;
@@ -153,14 +154,17 @@ void create_game_state (gameState state){
         }
     }
     start_players();
+    return 0;
 }
 
-void create_sync (int player_count){
+int create_sync (int player_count){
     sync_ptr = create_shm_sync(player_count);
     if(sync_ptr == NULL){
         fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
-        exit(EXIT_FAILURE);
+        return -1;
     }
+
+    return 0;
 }
 
 bool is_valid_movement(unsigned char move, int id){
@@ -215,6 +219,8 @@ void print_arguments(){
         printf("  %s\n", state_ptr->players[i].name);
     }
 
+    sleep(2);
+
 }
 
 static pid_t fork_view(const char* width, const char* height){
@@ -226,7 +232,7 @@ static pid_t fork_view(const char* width, const char* height){
     if (pid == 0) {
         execl(view, "vista", width, height, NULL);
         perror("execl view");
-        _exit(1);
+        _exit(EXIT_FAILURE);
     }
 
     return pid;
@@ -242,10 +248,10 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
     }
 
     for (int i = 0; i < player_count; i++) {
-        if (pipe(pipes[i]) == -1) { perror("pipe"); exit(1); }
+        if (pipe(pipes[i]) == -1) { perror("pipe"); exit(EXIT_FAILURE); }
 
         pid_t pid = fork();
-        if (pid < 0) { perror("fork"); exit(1); }
+        if (pid < 0) { perror("fork"); exit(EXIT_FAILURE); }
 
         if (pid == 0) {
             for (int j = 0; j <= i; j++) {
@@ -255,19 +261,19 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
 
             if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
                 perror("dup2");
-                _exit(1);
+                _exit(EXIT_FAILURE);
             }
             if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
 
             execl(state_ptr->players[i].name, "jugador", width, height, NULL);
             perror("execl jugador");
-            _exit(1);
+            _exit(EXIT_FAILURE);
         } else {
             if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
 
             fds[i] = pipes[i][0];
             state_ptr->players[i].pid = pid;
-            printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
+            //printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
         }
     }
 }
@@ -309,7 +315,7 @@ void game_management(int player_count, int fds[]){
 
         if (ready < 0) {
             perror("select");
-            exit(1);
+            exit(EXIT_FAILURE);
         } else if (ready > 0){
             for (int i = 0; i < player_count; i++, id_roundrobin=(id_roundrobin+1)%player_count) {
                 if (fds[id_roundrobin] >= 0 && FD_ISSET(fds[id_roundrobin], &readfds)) {
@@ -354,8 +360,15 @@ int main(int argc, char *argv[]) {
     }
     srand(seed);
     
-    create_game_state(state);
-    create_sync(state_ptr->player_count);
+    if(create_game_state(state)<0){
+        fprintf(stderr, "Error: cannot create shared memory for gameState\n");
+        exit(EXIT_FAILURE);
+    }
+    if (create_sync(state_ptr->player_count)<0){
+        fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
+        destroy_shm_state(state_ptr);
+        exit(EXIT_FAILURE);
+    };
 
     print_arguments();
 
@@ -370,7 +383,9 @@ int main(int argc, char *argv[]) {
         
         if (pid_view<0){
             perror("execl view");
-            exit(1);
+            destroy_shm_sync(sync_ptr, state_ptr->player_count);
+            destroy_shm_state(state_ptr);
+            exit(EXIT_FAILURE);
         }
     }
    
