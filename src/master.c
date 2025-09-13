@@ -387,16 +387,20 @@ int main(int argc, char *argv[]) {
         master_release_player(sync_ptr, i);
     }
 
+    pid_t wpid;
+    int status;
+
     if (view!=NULL){
         master_notify_view(sync_ptr);
         master_wait_view(sync_ptr);
-    }
 
-    int status;
-    pid_t wpid = waitpid(pid_view, &status, 0);
-    if (wpid > 0) {
+        
+        wpid = waitpid(pid_view, &status, 0);
+        if (wpid > 0) {
         printf("View exited (%d)\n", status);
     }
+    }
+
     
     for (int i = 0; i < N; i++) {
         wpid = waitpid(state_ptr->players[i].pid, &status, 0);
