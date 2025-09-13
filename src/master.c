@@ -315,7 +315,7 @@ void game_management(int player_count, int fds[]){
                 if (fds[id_roundrobin] >= 0 && FD_ISSET(fds[id_roundrobin], &readfds)) {
                     int n = read(fds[id_roundrobin], &move, 1);
                     if (n <= 0) {
-                        state_ptr->players[i].blocked = true;
+                        state_ptr->players[id_roundrobin].blocked = true;
                         close(fds[id_roundrobin]);
                         fds[id_roundrobin] = -1; 
                     } else {
