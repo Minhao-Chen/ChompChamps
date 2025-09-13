@@ -11,7 +11,6 @@
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
 
-//gameState state;
 gameState * state_ptr = NULL;
 synchronization * sync_ptr = NULL;
 
@@ -37,7 +36,6 @@ static void start_players() {
         state_ptr->players[i].invalid_move = 0;
         state_ptr->players[i].valid_move = 0;
         
-        // Posiciones iniciales únicas
         do {
             state_ptr->players[i].pos_x = rand() % state_ptr->width;
             state_ptr->players[i].pos_y = rand() % state_ptr->height;
@@ -49,15 +47,14 @@ static void start_players() {
 }
 
 static void parse_player(gameState * config_args, const char *name){
-     memset(config_args->players[config_args->player_count].name, 0, MAX_LENGHT_NAME);
-                    for (int i = 0; i < MAX_LENGHT_NAME-1 && name[i]!=0; i++){
-                        config_args->players[config_args->player_count].name[i]=name[i];
-                    }
-                    config_args->players[config_args->player_count].name[MAX_LENGHT_NAME-1] = '\0';
-                    config_args->player_count++;
+    memset(config_args->players[config_args->player_count].name, 0, MAX_LENGHT_NAME);
+    for (int i = 0; i < MAX_LENGHT_NAME-1 && name[i]!=0; i++){
+        config_args->players[config_args->player_count].name[i]=name[i];
+    }
+    config_args->players[config_args->player_count].name[MAX_LENGHT_NAME-1] = '\0';
+    config_args->player_count++;
 }
 
-// Función para parsear parámetros
 gameState parse_arguments(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
@@ -115,12 +112,10 @@ gameState parse_arguments(int argc, char *argv[]) {
                     parse_player(&config_args, argv[optind]);
                     optind++;
                 }
-                
                 break;
-                
             }
             default:
-                fprintf(stderr, "Uso: %s [-w width] [-h height] [-d delay] [-t timeout] [-s seed] [-v view_path] -p player1 [player2 ...]\n", argv[0]);
+                fprintf(stderr, "Usage: %s [-w width] [-h height] [-d delay] [-s seed] [-v view] [-t timeout] -p player1 player2 ...\n", argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
@@ -133,16 +128,14 @@ gameState parse_arguments(int argc, char *argv[]) {
 }
 
 
-void createGameState (gameState state){
-
+void create_game_state (gameState state){
     state_ptr = create_shm_state(state.width, state.height);
 
     if (state_ptr == NULL) {
-        fprintf(stderr, "Error creando shared memory del estado\n");
+        fprintf(stderr, "Error: cannot create shared memory for gameState\n");
         exit(EXIT_FAILURE);
     }
 
-    // Inicializar estructura
     state_ptr->width = state.width;
     state_ptr->height = state.height;
     state_ptr->player_count = state.player_count;
@@ -154,7 +147,6 @@ void createGameState (gameState state){
         }
     }
 
-    // Llena con aleatorios entre 1 y 9
     for (int i = 0; i < state_ptr->height; i++) {
         for (int j = 0; j < state_ptr->width; j++) {
             state_ptr->board[j+i*state_ptr->width] = (rand() % 9) + 1;
@@ -163,10 +155,10 @@ void createGameState (gameState state){
     start_players();
 }
 
-void createSync (int player_count){
+void create_sync (int player_count){
     sync_ptr = create_shm_sync(player_count);
     if(sync_ptr == NULL){
-        fprintf(stderr, "Error creando shared memeory del semaforo");
+        fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -211,7 +203,6 @@ void apply_movement(unsigned char move, int id){
 }
 
 void print_arguments(){
-    (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
     printf("width: %u\n", state_ptr->width);
     printf("height: %u\n", state_ptr->height);
     printf("delay: %u\n", delay);
@@ -229,13 +220,10 @@ void print_arguments(){
 static pid_t fork_view(const char* width, const char* height){
     pid_t pid = fork();
     if (pid < 0) {
-        // Error al hacer fork: conviene no matar todo acá,
-        // sino devolver un error al main.
         perror("fork");
         return -1; 
     }
     if (pid == 0) {
-        // vista
         execl(view, "vista", width, height, NULL);
         perror("execl view");
         _exit(1);
@@ -248,7 +236,6 @@ static pid_t fork_view(const char* width, const char* height){
 static void fork_players(int player_count, int pipes[][2], int fds[],
                          const char *width, const char *height)
 {
-    // 1) Inicializar
     for (int i = 0; i < player_count; i++) {
         pipes[i][0] = pipes[i][1] = -1;
         fds[i] = -1;
@@ -261,30 +248,24 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
         if (pid < 0) { perror("fork"); exit(1); }
 
         if (pid == 0) {
-            // ===== Hijo (jugador i) =====
-            // 2) Cerrar todo lo heredado que no necesito (validando)
             for (int j = 0; j <= i; j++) {
                 if (pipes[j][0] >= 0) { close(pipes[j][0]); pipes[j][0] = -1; }
                 if (j != i && pipes[j][1] >= 0) { close(pipes[j][1]); pipes[j][1] = -1; }
             }
 
-            // 3) Redirigir stdout → write-end propio
             if (dup2(pipes[i][1], STDOUT_FILENO) == -1) {
                 perror("dup2");
                 _exit(1);
             }
             if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
 
-            // 4) Ejecutar jugador
             execl(state_ptr->players[i].name, "jugador", width, height, NULL);
             perror("execl jugador");
             _exit(1);
         } else {
-            // ===== Padre (master) =====
-            // 5) Cierra su write-end y lo marca
             if (pipes[i][1] >= 0) { close(pipes[i][1]); pipes[i][1] = -1; }
 
-            fds[i] = pipes[i][0];                 // read-end para select
+            fds[i] = pipes[i][0];
             state_ptr->players[i].pid = pid;
             printf("Jugador %d pid=%d name=%s\n", i, pid, state_ptr->players[i].name);
         }
@@ -299,18 +280,16 @@ void game_management(int player_count, int fds[]){
 
     time_t last_valid_request = time(NULL);
 
-    // Bucle principal
     while (!state_ptr->game_ended) {
-        // Revisar si superó timeout desde la última solicitud válida
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
-            printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
+            //printf("Timeout: ningún movimiento válido en %d segundos. Fin del juego.\n", timeout);
             break;
         }
 
         FD_ZERO(&readfds);
         maxfd = -1;
-        // Agregamos todos los pipes de los jugadores
+
         for (int i = 0; i < player_count; i++) {
             FD_SET(fds[i], &readfds);
             if (fds[i]>maxfd){
@@ -318,11 +297,10 @@ void game_management(int player_count, int fds[]){
             } 
         }
 
-        if (maxfd < 0) {                    // no queda ningún jugador emitiendo
+        if (maxfd < 0) {
             break;
         } 
 
-        // Timeout opcional (1s)
         struct timeval tv;
         tv.tv_sec = 0;
         tv.tv_usec = 500000;
@@ -337,45 +315,38 @@ void game_management(int player_count, int fds[]){
                 if (fds[id_roundrobin] >= 0 && FD_ISSET(fds[id_roundrobin], &readfds)) {
                     int n = read(fds[id_roundrobin], &move, 1);
                     if (n <= 0) {
-                        // EOF → jugador bloqueado, close es en EOF
                         state_ptr->players[i].blocked = true;
-                        close(fds[id_roundrobin]); //? creo q va asi
+                        close(fds[id_roundrobin]);
                         fds[id_roundrobin] = -1; 
                     } else {
-                        // Bloquear estado para aplicar movimiento
                         lock_writer(sync_ptr);
 
                         if (is_valid_movement(move, id_roundrobin)) {
                             apply_movement(move, id_roundrobin);
                             state_ptr->players[id_roundrobin].valid_move++;
-                            last_valid_request = time(NULL); // reinicia el reloj
+                            last_valid_request = time(NULL);
                         } else {
                             state_ptr->players[id_roundrobin].invalid_move++;
                         }
 
                         unlock_writer(sync_ptr);
-
                     }
-
-                    // Habilitar de nuevo al jugador
                     master_release_player(sync_ptr, id_roundrobin);
                 }
             }
         }
-
         if (view!=NULL){
-            // Notificar a la vista
             master_notify_view(sync_ptr);
             master_wait_view(sync_ptr);
         }
 
-        // Delay entre actualizaciones
         usleep(delay * 1000u);
     }
 }
 
 
 int main(int argc, char *argv[]) {
+    (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
     gameState state = parse_arguments(argc, argv);
 
     if (seed == 0){
@@ -383,8 +354,8 @@ int main(int argc, char *argv[]) {
     }
     srand(seed);
     
-    createGameState(state);
-    createSync(state_ptr->player_count);
+    create_game_state(state);
+    create_sync(state_ptr->player_count);
 
     print_arguments();
 
@@ -393,7 +364,7 @@ int main(int argc, char *argv[]) {
     sprintf(arg_h, "%d", state_ptr->height);
 
     pid_t pid_view;
-    //Crear la vista
+
     if(view!=NULL){
         pid_view = fork_view(arg_w, arg_h);
         
@@ -404,8 +375,8 @@ int main(int argc, char *argv[]) {
     }
    
     int N = state_ptr->player_count;
-    int pipes[N][2]; // te abre pipe para cada jugador
-    int fds[N]; // solo los read-ends para el select
+    int pipes[N][2];
+    int fds[N];
 
     fork_players(N, pipes, fds, arg_w, arg_h);
 
@@ -417,7 +388,6 @@ int main(int argc, char *argv[]) {
     }
 
     if (view!=NULL){
-        // Notificar a la vista
         master_notify_view(sync_ptr);
         master_wait_view(sync_ptr);
     }
@@ -428,7 +398,6 @@ int main(int argc, char *argv[]) {
         printf("View exited (%d)\n", status);
     }
     
-    // Esperar a que todos los players terminen
     for (int i = 0; i < N; i++) {
         wpid = waitpid(state_ptr->players[i].pid, &status, 0);
         if (wpid > 0) {
@@ -440,6 +409,5 @@ int main(int argc, char *argv[]) {
     destroy_shm_sync(sync_ptr, state_ptr->player_count);
     destroy_shm_state(state_ptr);
 
-    //printf("Padre: todos los hijos terminaron, fin del programa.\n");
     return 0;
 }

@@ -104,14 +104,12 @@ static void * connect_shm(const char * mem_name, int oflag, int prot, size_t mem
     return shm;    
 }
 
-// Conectar a memoria compartida del estado (para vista y jugadores)
 gameState* connect_shm_state(int width, int height){
     size_t gameState_size = get_state_size(width, height);
 
     return (gameState*) connect_shm(SHM_STATE, O_RDONLY, PROT_READ, gameState_size);
 }
 
-// Conectar a memoria compartida de sincronización (para vista y jugadores)
 synchronization* connect_shm_sync() {
     return (synchronization*) connect_shm(SHM_SYNC, O_RDWR, PROT_READ | PROT_WRITE, sizeof(synchronization));
 }
@@ -132,7 +130,6 @@ static int close_shm(void * shm, const char * mem_name, size_t mem_size){
 
 }
 
-// Cerrar conexión a memoria de estado (sin destruir)
 int close_shm_state(gameState* state) {    
     if (state == NULL || state == MAP_FAILED) {
         return 0;
@@ -142,7 +139,6 @@ int close_shm_state(gameState* state) {
     return close_shm(state, SHM_STATE, size);
 }
 
-// Cerrar conexión a memoria de sincronización (sin destruir)
 int close_shm_sync(synchronization* sync) {
     return close_shm(sync, SHM_SYNC,sizeof(synchronization));
 }
@@ -165,7 +161,7 @@ int destroy_shm_state(gameState* state){
     int result = 0;
 
     if (state == NULL) {
-        return 0; // Ya es NULL, nada que hacer
+        return 0;
     }
 
     if(close_shm_state(state) == -1){
@@ -227,31 +223,29 @@ int destroy_shm_sync(synchronization* sync, int num_players){
 }
 
 void lock_writer(synchronization* sync){
-    // Protocolo escritor (evita inanición)
-    sem_wait(&sync->master_inanition_mutex);  // C: Evitar inanición
-    sem_wait(&sync->state_lock_mutex);        // D: Lock de escritura
+    sem_wait(&sync->master_inanition_mutex);
+    sem_wait(&sync->state_lock_mutex);
 }
 
 void unlock_writer(synchronization* sync){
-    sem_post(&sync->state_lock_mutex);        // D: Liberar lock
-    sem_post(&sync->master_inanition_mutex);  // C: Permitir siguiente escritor
+    sem_post(&sync->state_lock_mutex);     
+    sem_post(&sync->master_inanition_mutex); 
 }
 
 void lock_reader(synchronization* sync){
-    // Protocolo lector
-    sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
+    sem_wait(&sync->reader_count_lock_mutex);    
     if (sync->activated_reader_counter++ == 0) {
-        sem_wait(&sync->state_lock_mutex);    // D: Primer lector bloquea escritores
+        sem_wait(&sync->state_lock_mutex);   
     }
-    sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
+    sem_post(&sync->reader_count_lock_mutex);   
 }
 
 void unlock_reader(synchronization* sync){
-    sem_wait(&sync->reader_count_lock_mutex);      // E: Lock contador
+    sem_wait(&sync->reader_count_lock_mutex); 
     if (sync->activated_reader_counter-- == 1) {
-        sem_post(&sync->state_lock_mutex);    // D: Último lector libera escritores
+        sem_post(&sync->state_lock_mutex);
     }
-    sem_post(&sync->reader_count_lock_mutex);      // E: Liberar contador
+    sem_post(&sync->reader_count_lock_mutex);
 }
 
 void player_wait_turn(synchronization *sync, int player_id){
