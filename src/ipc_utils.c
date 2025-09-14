@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
 
 static void * create_shm(const char * mem_name, size_t mem_size){
     int shm_fd = shm_open(mem_name, O_CREAT | O_RDWR, 0666);
@@ -233,11 +238,15 @@ void unlock_writer(synchronization* sync){
 }
 
 void lock_reader(synchronization* sync){
+    sem_wait(&sync->master_inanition_mutex);
+
     sem_wait(&sync->reader_count_lock_mutex);    
     if (sync->activated_reader_counter++ == 0) {
         sem_wait(&sync->state_lock_mutex);   
     }
     sem_post(&sync->reader_count_lock_mutex);   
+    
+    sem_post(&sync->master_inanition_mutex);
 }
 
 void unlock_reader(synchronization* sync){

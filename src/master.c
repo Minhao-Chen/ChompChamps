@@ -1,18 +1,14 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <sys/wait.h>
+#include "master.h"
 #include "common.h"
 #include "ipc_utils.h"
 #include <time.h>
 #include <getopt.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/wait.h>
 #include <sys/select.h>
-#include <math.h>
-
-#define DEFAULT_DELAY 200
-#define DEFAULT_TIMEOUT 10
-
-#define PI 3.14159
 
 gameState * state_ptr = NULL;
 synchronization * sync_ptr = NULL;
@@ -22,28 +18,8 @@ unsigned int delay = DEFAULT_DELAY;
 unsigned int timeout = DEFAULT_TIMEOUT;
 unsigned int seed=0;
 
-static const int POLYGON_OFFSETS[][9][2] = {
-    {},  // 0 jugadores (no usado)
-    {{0, 0}},  // 1 jugador: centro
-    {{-800, 0}, {800, 0}},  // 2 jugadores: línea horizontal
-    // 3 jugadores: triángulo (vértice superior)
-    {{0, -1000}, {866, 500}, {-866, 500}},
-    // 4 jugadores: cuadrado
-    {{0, -1000}, {1000, 0}, {0, 1000}, {-1000, 0}},
-    // 5 jugadores: pentágono
-    {{0, -1000}, {951, -309}, {588, 809}, {-588, 809}, {-951, -309}},
-    // 6 jugadores: hexágono
-    {{0, -1000}, {866, -500}, {866, 500}, {0, 1000}, {-866, 500}, {-866, -500}},
-    // 7 jugadores: heptágono
-    {{0, -1000}, {782, -623}, {975, -222}, {434, 901}, {-434, 901}, {-975, -222}, {-782, -623}},
-    // 8 jugadores: octágono
-    {{0, -1000}, {707, -707}, {1000, 0}, {707, 707}, {0, 1000}, {-707, 707}, {-1000, 0}, {-707, -707}},
-    // 9 jugadores: eneágono
-    {{0, -1000}, {643, -766}, {985, -174}, {866, 500}, {342, 940}, {-342, 940}, {-866, 500}, {-985, -174}, {-643, -766}}
-};
-
 static int calculate_max_radius(int width, int height) {
-    int margin = 1;
+    int margin = 2;
     int center_x = (width - 1) / 2;
     int center_y = (height - 1) / 2;
     
@@ -55,8 +31,6 @@ static int calculate_max_radius(int width, int height) {
     // Convertir a escala *1000 y ajustar para que no toque los bordes
     return radius * 1000;
 }
-
-
 
 static void start_players(int width, int height) {
     int player_count = state_ptr->player_count;
@@ -109,7 +83,7 @@ static void parse_player(gameState * config_args, const char *name){
     config_args->player_count++;
 }
 
-gameState parse_arguments(int argc, char *argv[]) {
+static gameState parse_arguments(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Error: At least one player must be specified using -p.\n");
         exit(EXIT_FAILURE);
@@ -182,7 +156,7 @@ gameState parse_arguments(int argc, char *argv[]) {
 }
 
 
-int create_game_state(gameState state){
+static int create_game_state(gameState state){
     state_ptr = create_shm_state(state.width, state.height);
 
     if (state_ptr == NULL) {
@@ -209,7 +183,7 @@ int create_game_state(gameState state){
     return 0;
 }
 
-int create_sync(int player_count){
+static int create_sync(int player_count){
     sync_ptr = create_shm_sync(player_count);
     if(sync_ptr == NULL){
         fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
@@ -219,7 +193,7 @@ int create_sync(int player_count){
     return 0;
 }
 
-bool is_valid_movement(unsigned char move, int id){
+static bool is_valid_movement(unsigned char move, int id){
     if (move > 7){
         return false;
     }
@@ -241,7 +215,7 @@ bool is_valid_movement(unsigned char move, int id){
     
 }
 
-void apply_movement(unsigned char move, int id){
+static void apply_movement(unsigned char move, int id){
     if (move > 7){
         return;
     }
@@ -258,7 +232,7 @@ void apply_movement(unsigned char move, int id){
     
 }
 
-void print_arguments(){
+static void print_arguments(){
     printf("width: %u\n", state_ptr->width);
     printf("height: %u\n", state_ptr->height);
     printf("delay: %u\n", delay);
@@ -272,7 +246,6 @@ void print_arguments(){
     }
 
     sleep(2);
-
 }
 
 static pid_t fork_view(const char* width, const char* height){
@@ -281,6 +254,7 @@ static pid_t fork_view(const char* width, const char* height){
         perror("fork");
         return -1; 
     }
+
     if (pid == 0) {
         execl(view, "vista", width, height, NULL);
         perror("execl view");
@@ -331,7 +305,7 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
 }
 
 
-void game_management(int player_count, int fds[]){
+static void game_management(int player_count, int fds[]){
     fd_set readfds;
     unsigned char move;
     int maxfd, id_roundrobin=0;
@@ -408,7 +382,6 @@ void game_management(int player_count, int fds[]){
     }
 }
 
-
 int main(int argc, char *argv[]) {
     (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
     gameState state = parse_arguments(argc, argv);
@@ -447,16 +420,16 @@ int main(int argc, char *argv[]) {
         }
     }
    
-    int N = state_ptr->player_count;
-    int pipes[N][2];
-    int fds[N];
+    int player_count = state_ptr->player_count;
+    int pipes[player_count][2];
+    int fds[player_count];
 
-    fork_players(N, pipes, fds, arg_w, arg_h);
+    fork_players(player_count, pipes, fds, arg_w, arg_h);
 
-    game_management(N, fds);
+    game_management(player_count, fds);
 
     state_ptr->game_ended = true;
-    for (int i = 0; i < N; i++){
+    for (int i = 0; i < player_count; i++){
         master_release_player(sync_ptr, i);
     }
 
@@ -470,12 +443,11 @@ int main(int argc, char *argv[]) {
         
         wpid = waitpid(pid_view, &status, 0);
         if (wpid > 0) {
-        printf("View exited (%d)\n", status);
+        printf("\n\nView exited (%d)\n", status);
     }
     }
-
     
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i < player_count; i++) {
         wpid = waitpid(state_ptr->players[i].pid, &status, 0);
         if (wpid > 0) {
             printf("Player player (%d) exited (%d) with a score of %d / %d / %d\n", i, status, 

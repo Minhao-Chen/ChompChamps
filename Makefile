@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -pthread
-LDFLAGS = -lrt -lm
+LDFLAGS = -lrt
 
 SRC_DIR = src
 BIN_DIR = bin
@@ -8,7 +8,7 @@ BIN_DIR = bin
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(BIN_DIR)/master: $(SRC_DIR)/master.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
+$(BIN_DIR)/master: $(SRC_DIR)/master.c $(SRC_DIR)/common.h $(SRC_DIR)/master.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(BIN_DIR)/view: $(SRC_DIR)/view.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)

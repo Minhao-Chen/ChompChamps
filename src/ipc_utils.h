@@ -2,10 +2,6 @@
 #define IPC_UTILS_H
 
 #include "common.h"
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <string.h>
 
 
 // Funciones que manejan las memorias compartidas

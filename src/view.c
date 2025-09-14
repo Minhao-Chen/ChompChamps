@@ -7,6 +7,7 @@
 #include <termios.h>
 #include <time.h>
 
+
 #define BUFFER_SIZE 4096
 
 
@@ -15,7 +16,7 @@ synchronization* sync_ptr;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
-void render_board(int width, int height){
+static void render_board(int width, int height){
     int positions_of_players[MAX_PLAYERS];
     for (int i = 0; i < state_ptr->player_count; i++) {
         positions_of_players[i]=state_ptr->players[i].pos_y*width + state_ptr->players[i].pos_x;
@@ -23,7 +24,7 @@ void render_board(int width, int height){
 
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
-            int cell_pos=y * width + x;
+            int cell_pos = y * width + x;
             int cell_content = state_ptr->board[cell_pos];
             int printed = 0;
 
@@ -44,7 +45,7 @@ void render_board(int width, int height){
     }
 }
 
-void render_players() {
+static void render_players() {
     printf("Jugadores:\n");
     for (int i = 0; i < state_ptr->player_count; i++) {
         player *p = &state_ptr->players[i];
@@ -73,7 +74,7 @@ int main(int argc, char *argv[]) {
     }
 
 
-   while (1){
+    while (1){
         view_wait_changes(sync_ptr);
         if (state_ptr == NULL || sync_ptr == NULL) {
             break;

@@ -5,51 +5,37 @@
 #include "common.h"
 #include "ipc_utils.h"
 
-
-typedef struct { 
-    int board[8];
-    unsigned short player_x, player_y;
-} movement_info;
-
 gameState * state_ptr;
 synchronization * sync_ptr;
 
-static movement_info mip;                 
-movement_info *movement_info_ptr = &mip;
+int adjacent_cells[NMOVS];
 
-bool is_valid_move(int width, int height, unsigned short player_x, unsigned short player_y, int diff_x, int diff_y);
-int movement(int width, int height, int player_id);
+static int movement(int width, int height){
 
-int movement(int width, int height, int player_id){
-
-    int max = 0;
-    char m = NMOVS;
-    int next_pos;
-    unsigned short player_x = movement_info_ptr->player_x, player_y=movement_info_ptr->player_y;
-    for(int i=0; i < NMOVS; i++){ 
-        if(is_valid_move(width,height,player_x, player_y , movs[i][0], movs[i][1])){
-           // next_pos = (player_y + movs[i][1]) * width + player_x + movs[i][0];
-            if(movement_info_ptr->board[i] > max){
-                max = movement_info_ptr->board[i];
-                m = i;
-            }
+    int max_adjacent_score = 0;
+    char move = NMOVS;
+    for(int direction=0; direction < NMOVS; direction++){ 
+        if(adjacent_cells[direction] > max_adjacent_score){
+            max_adjacent_score = adjacent_cells[direction];
+            move = direction;
         }
     }
     
-    if(m<NMOVS){
-        write(STDOUT_FILENO, &m,  1);
+    if(move<NMOVS){
+        write(STDOUT_FILENO, &move,  1);
         return 0;
     }
 
     return -1;
 }
 
-bool is_valid_move(int width, int height, unsigned short player_x, unsigned short player_y, int diff_x, int diff_y){
+
+static bool is_valid_move(int width, int height, unsigned short player_x, unsigned short player_y, int diff_x, int diff_y){
   return player_y+diff_y >= 0 && player_y+diff_y < height && player_x+diff_x >= 0 && player_x+diff_x < width; 
 }
 
 
-int get_id (){
+static int get_id(){
     pid_t my_pid = getpid();
     int my_id=-1;
     
@@ -69,100 +55,19 @@ int get_id (){
 
 }
 
-/*
-int inic_local_game_info(int width, int height){
-    movement_info_ptr = malloc(sizeof(movement_info));
-    if (movement_info_ptr == NULL) { 
-        fprintf(stderr, "Error: malloc\n");
-        return -1; 
-    }
 
-    movement_info_ptr->board = malloc(width * height * sizeof(int));
-    if (movement_info_ptr->board == NULL) {
-        fprintf(stderr, "Error: malloc\n");
-        free(movement_info_ptr);
-        return -1;
-    }
-    return 0;
-}
-*/
-
-void free_local_game_info(){
-    free(movement_info_ptr->board);
-    free(movement_info_ptr);
-    return;
-}
-
-/*
-void copy_state_info(int width, int height, int player_id){
-    movement_info_ptr->player_x = state_ptr->players[player_id].pos_x;
-    movement_info_ptr->player_y = state_ptr->players[player_id].pos_y;
-
-    int row_to_copy, pos_aux;
-
-    //Copiar la fila en la que está el jugador y, de ser posible, la de arriba y la de abajo
-    if ((row_to_copy = movement_info_ptr->player_y-1) >= 0){
-        for (int i = 0; i < width; i++){
-            pos_aux = row_to_copy*width + i;
-            movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
-        }
-    }
-
-    row_to_copy=movement_info_ptr->player_y;
-    for (int i = 0; i < width; i++){
-        pos_aux = row_to_copy*width + i;
-        movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
-    }    
-
-    if ((row_to_copy = movement_info_ptr->player_y+1) < height){
-        for (int i = 0; i < width; i++){
-            pos_aux = row_to_copy*width + i;
-            movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
-        }
-    }
-
-    return;
-    
-}
-*/
-
-void copy_state_info(int width, int height, int player_id){
-    movement_info_ptr->player_x = state_ptr->players[player_id].pos_x;
-    movement_info_ptr->player_y = state_ptr->players[player_id].pos_y;
-
-    //int row_to_copy, pos_aux;
+static void copy_board_info(int width, int height, int player_id){
+    unsigned short player_x = state_ptr->players[player_id].pos_x, player_y = state_ptr->players[player_id].pos_y;
 
     for(int i=0; i < NMOVS; i++){
-        if(is_valid_move(width,height,movement_info_ptr->player_x, movement_info_ptr->player_y , movs[i][0], movs[i][1])){
-            movement_info_ptr->board[i] = state_ptr->board[(movement_info_ptr->player_y + movs[i][1] ) * width + movement_info_ptr->player_x + movs[i][0]];
+        if(is_valid_move(width,height,player_x, player_y , movs[i][0], movs[i][1])){
+            adjacent_cells[i] = state_ptr->board[(player_y + movs[i][1] ) * width + player_x + movs[i][0]];
         }else{
-            movement_info_ptr->board[i] = 0 ;
-        }
-    }
-/*
-    //Copiar la fila en la que está el jugador y, de ser posible, la de arriba y la de abajo
-    if ((row_to_copy = movement_info_ptr->player_y-1) >= 0){
-        for (int i = 0; i < width; i++){
-            pos_aux = row_to_copy*width + i;
-            movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
+            adjacent_cells[i] = 0 ;
         }
     }
 
-    row_to_copy=movement_info_ptr->player_y;
-    for (int i = 0; i < width; i++){
-        pos_aux = row_to_copy*width + i;
-        movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
-    }    
-
-    if ((row_to_copy = movement_info_ptr->player_y+1) < height){
-        for (int i = 0; i < width; i++){
-            pos_aux = row_to_copy*width + i;
-            movement_info_ptr->board[pos_aux] = state_ptr->board[pos_aux];
-        }
-    }
-*/
     return;
-    
 }
 
 
@@ -174,14 +79,14 @@ int main(int argc, char *argv[]) {
     state_ptr = connect_shm_state(width, height);
     if (state_ptr == NULL) { 
         perror("connect_shm_state"); 
-        _exit(EXIT_FAILURE); 
+        return 1; 
     }
 
     sync_ptr = connect_shm_sync();
     if (sync_ptr == NULL) { 
         perror("connect_shm_sync"); 
         close_shm_state(state_ptr);
-        _exit(EXIT_FAILURE); 
+        return 1; 
     }
 
     lock_reader(sync_ptr);
@@ -193,40 +98,28 @@ int main(int argc, char *argv[]) {
         close_shm_state(state_ptr);
         return 1;
     }
-
-/*
-    if (inic_local_game_info(width, height)<0){
-        close_shm_sync(sync_ptr);
-        close_shm_state(state_ptr);
-        return 1;
-    }
-    */
     
     while (1) { 
         player_wait_turn(sync_ptr, my_id); 
-        sem_wait(&sync_ptr->master_inanition_mutex);
 
         lock_reader(sync_ptr);
-        sem_post(&sync_ptr->master_inanition_mutex);
-
+        
         if (state_ptr->game_ended) {
             unlock_reader(sync_ptr);
             break;
         }
  
-        copy_state_info(width, height, my_id);
+        copy_board_info(width, height, my_id);
 
         unlock_reader(sync_ptr);
 
-        if(movement(width, height, my_id)<0){
+        if(movement(width, height)<0){
             close(STDOUT_FILENO);
             break;
         }
         
     }
 
-
-    //free_local_game_info();
     close_shm_sync(sync_ptr);
     close_shm_state(state_ptr);
     return 0;
