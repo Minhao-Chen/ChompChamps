@@ -22,91 +22,6 @@ unsigned int delay = DEFAULT_DELAY;
 unsigned int timeout = DEFAULT_TIMEOUT;
 unsigned int seed=0;
 
-
-static bool is_position_unique(int current_index) {
-    for (int i = 0; i < current_index; i++) {
-        if (state_ptr->players[i].pos_x == state_ptr->players[current_index].pos_x &&
-            state_ptr->players[i].pos_y == state_ptr->players[current_index].pos_y) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/*
-// Busca la celda libre (>0) más cercana a (x,y) por anillos crecientes.
-// Devuelve por referencia x,y actualizados.
-static void find_nearest_free_cell(int *x, int *y) {
-    const int W = state_ptr->width;
-    const int H = state_ptr->height;
-
-    // Si ya es libre, listo
-    if (state_ptr->board[*y * W + *x] > 0) return;
-
-    for (int r = 1; r <= (W > H ? W : H); r++) {
-        for (int dy = -r; dy <= r; dy++) {
-            for (int dx = -r; dx <= r; dx++) {
-                // Solo borde del anillo para no repetir
-                if (abs(dx) != r && abs(dy) != r) continue;
-
-                int nx = *x + dx;
-                int ny = *y + dy;
-                if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
-
-                if (state_ptr->board[ny * W + nx] > 0) {
-                    *x = nx;
-                    *y = ny;
-                    return;
-                }
-            }
-        }
-    }
-    // Si no encontramos nada (tablero lleno de ocupados), no movemos.
-}
-
-static void start_players() {
-    // Reset de métricas
-    for (int i = 0; i < state_ptr->player_count; i++) {
-        state_ptr->players[i].score = 0;
-        state_ptr->players[i].invalid_move = 0;
-        state_ptr->players[i].valid_move = 0;
-        state_ptr->players[i].pid = 0;
-        state_ptr->players[i].blocked = false;
-    }
-
-    const int N = state_ptr->player_count;
-    const int W = state_ptr->width;
-    const int H = state_ptr->height;
-
-    // Definimos una grilla "equitativa": ~sqrt(N) x ~sqrt(N)
-    int cols = (int)ceil(sqrt((double)N));
-    int rows = (int)ceil((double)N / cols);
-
-    for (int k = 0; k < N; k++) {
-        int r = k / cols;
-        int c = k % cols;
-
-        // Centro de la subcelda (evita amontonarlos en bordes)
-        int x = (int)(( (c + 0.5) * W) / cols);
-        int y = (int)(( (r + 0.5) * H) / rows);
-
-        // Clamp defensivo por si cae en W o H exacto
-        if (x >= W) x = W - 1;
-        if (y >= H) y = H - 1;
-
-        // Si está ocupado (<=0), buscamos la libre más cercana
-        find_nearest_free_cell(&x, &y);
-
-        state_ptr->players[k].pos_x = x;
-        state_ptr->players[k].pos_y = y;
-
-        // Marcar ocupación de la celda por el jugador k
-        // Nota: si querés evitar que el jugador 0 deje un 0 (porque -0 = 0),
-        // podés usar -(k + 1) en vez de -k.
-        state_ptr->board[y * W + x] = -k;
-    }
-}*/
-
 static const int POLYGON_OFFSETS[][9][2] = {
     {},  // 0 jugadores (no usado)
     {{0, 0}},  // 1 jugador: centro
@@ -128,7 +43,7 @@ static const int POLYGON_OFFSETS[][9][2] = {
 };
 
 static int calculate_max_radius(int width, int height) {
-    int margin = 2;
+    int margin = 1;
     int center_x = (width - 1) / 2;
     int center_y = (height - 1) / 2;
     
@@ -149,14 +64,6 @@ static void start_players(int width, int height) {
         state_ptr->players[i].score = 0;
         state_ptr->players[i].invalid_move = 0;
         state_ptr->players[i].valid_move = 0;
-        
-        /*
-        do {
-            state_ptr->players[i].pos_x = rand() % state_ptr->width;
-            state_ptr->players[i].pos_y = rand() % state_ptr->height;
-        } while (!is_position_unique(i));*/
-
-        //state_ptr->board[state_ptr->players[i].pos_y * width + state_ptr->players[i].pos_x]=-i;
         
         state_ptr->players[i].pid = 0;
         state_ptr->players[i].blocked = false;
