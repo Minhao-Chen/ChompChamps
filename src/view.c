@@ -15,15 +15,20 @@ synchronization* sync_ptr;
 char render_buffer[BUFFER_SIZE]={0};
 char prev_buffer[BUFFER_SIZE]={0};
 
-void render_board(){
+void render_board(int width, int height){
+    int positions_of_players[MAX_PLAYERS];
+    for (int i = 0; i < state_ptr->player_count; i++) {
+        positions_of_players[i]=state_ptr->players[i].pos_y*width + state_ptr->players[i].pos_x;
+    }
 
-    for (int y = 0; y < state_ptr->height; y++) {
-        for (int x = 0; x < state_ptr->width; x++) {
-            int cell = state_ptr->board[y * state_ptr->width + x];
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int cell_pos=y * width + x;
+            int cell_content = state_ptr->board[cell_pos];
             int printed = 0;
 
             for (int i = 0; i < state_ptr->player_count; i++) {
-                if (y == state_ptr->players[i].pos_y && x == state_ptr->players[i].pos_x) {
+                if (cell_pos == positions_of_players[i]) {
                     printf("  P%d  ", i);
                     printed = 1;
                     break;
@@ -31,7 +36,7 @@ void render_board(){
             }
 
             if (!printed) {
-                printf("  %2d  ", cell);
+                printf("  %2d  ", cell_content);
             
             }
         }
@@ -54,7 +59,7 @@ int main(int argc, char *argv[]) {
 
     srand((unsigned)time(NULL));
 
-    state_ptr = connect_shm_state(width,height);
+    state_ptr = connect_shm_state(width, height);
     if (state_ptr == NULL) { 
         perror("connect_shm_state"); 
         return 1; 
@@ -76,7 +81,7 @@ int main(int argc, char *argv[]) {
 
         (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
         
-        render_board();
+        render_board(width, height);
         render_players();
         if (state_ptr->game_ended){
             break;

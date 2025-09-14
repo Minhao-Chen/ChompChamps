@@ -9,14 +9,12 @@
 #define SHM_SYNC "/game_sync"
 #define DEFAULT_WIDTH 10
 #define DEFAULT_HEIGHT 10
-//#define MAX_WIDTH  50
-//#define MAX_HEIGHT 50
-#define MAX_LENGHT_NAME 16
+#define MAX_LENGTH_NAME 16
 #define MAX_PLAYERS 9
 #define NMOVS 8
 
 typedef struct { 
-    char name[MAX_LENGHT_NAME]; 
+    char name[MAX_LENGTH_NAME]; 
     unsigned int score;
     unsigned int invalid_move;
     unsigned int valid_move;

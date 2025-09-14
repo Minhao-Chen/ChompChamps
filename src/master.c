@@ -7,9 +7,12 @@
 #include <time.h>
 #include <getopt.h>
 #include <sys/select.h>
+#include <math.h>
 
 #define DEFAULT_DELAY 200
 #define DEFAULT_TIMEOUT 10
+
+#define PI 3.14159
 
 gameState * state_ptr = NULL;
 synchronization * sync_ptr = NULL;
@@ -30,30 +33,172 @@ static bool is_position_unique(int current_index) {
     return true;
 }
 
+/*
+// Busca la celda libre (>0) más cercana a (x,y) por anillos crecientes.
+// Devuelve por referencia x,y actualizados.
+static void find_nearest_free_cell(int *x, int *y) {
+    const int W = state_ptr->width;
+    const int H = state_ptr->height;
+
+    // Si ya es libre, listo
+    if (state_ptr->board[*y * W + *x] > 0) return;
+
+    for (int r = 1; r <= (W > H ? W : H); r++) {
+        for (int dy = -r; dy <= r; dy++) {
+            for (int dx = -r; dx <= r; dx++) {
+                // Solo borde del anillo para no repetir
+                if (abs(dx) != r && abs(dy) != r) continue;
+
+                int nx = *x + dx;
+                int ny = *y + dy;
+                if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+
+                if (state_ptr->board[ny * W + nx] > 0) {
+                    *x = nx;
+                    *y = ny;
+                    return;
+                }
+            }
+        }
+    }
+    // Si no encontramos nada (tablero lleno de ocupados), no movemos.
+}
+
 static void start_players() {
+    // Reset de métricas
     for (int i = 0; i < state_ptr->player_count; i++) {
         state_ptr->players[i].score = 0;
         state_ptr->players[i].invalid_move = 0;
         state_ptr->players[i].valid_move = 0;
+        state_ptr->players[i].pid = 0;
+        state_ptr->players[i].blocked = false;
+    }
+
+    const int N = state_ptr->player_count;
+    const int W = state_ptr->width;
+    const int H = state_ptr->height;
+
+    // Definimos una grilla "equitativa": ~sqrt(N) x ~sqrt(N)
+    int cols = (int)ceil(sqrt((double)N));
+    int rows = (int)ceil((double)N / cols);
+
+    for (int k = 0; k < N; k++) {
+        int r = k / cols;
+        int c = k % cols;
+
+        // Centro de la subcelda (evita amontonarlos en bordes)
+        int x = (int)(( (c + 0.5) * W) / cols);
+        int y = (int)(( (r + 0.5) * H) / rows);
+
+        // Clamp defensivo por si cae en W o H exacto
+        if (x >= W) x = W - 1;
+        if (y >= H) y = H - 1;
+
+        // Si está ocupado (<=0), buscamos la libre más cercana
+        find_nearest_free_cell(&x, &y);
+
+        state_ptr->players[k].pos_x = x;
+        state_ptr->players[k].pos_y = y;
+
+        // Marcar ocupación de la celda por el jugador k
+        // Nota: si querés evitar que el jugador 0 deje un 0 (porque -0 = 0),
+        // podés usar -(k + 1) en vez de -k.
+        state_ptr->board[y * W + x] = -k;
+    }
+}*/
+
+static const int POLYGON_OFFSETS[][9][2] = {
+    {},  // 0 jugadores (no usado)
+    {{0, 0}},  // 1 jugador: centro
+    {{-800, 0}, {800, 0}},  // 2 jugadores: línea horizontal
+    // 3 jugadores: triángulo (vértice superior)
+    {{0, -1000}, {866, 500}, {-866, 500}},
+    // 4 jugadores: cuadrado
+    {{0, -1000}, {1000, 0}, {0, 1000}, {-1000, 0}},
+    // 5 jugadores: pentágono
+    {{0, -1000}, {951, -309}, {588, 809}, {-588, 809}, {-951, -309}},
+    // 6 jugadores: hexágono
+    {{0, -1000}, {866, -500}, {866, 500}, {0, 1000}, {-866, 500}, {-866, -500}},
+    // 7 jugadores: heptágono
+    {{0, -1000}, {782, -623}, {975, -222}, {434, 901}, {-434, 901}, {-975, -222}, {-782, -623}},
+    // 8 jugadores: octágono
+    {{0, -1000}, {707, -707}, {1000, 0}, {707, 707}, {0, 1000}, {-707, 707}, {-1000, 0}, {-707, -707}},
+    // 9 jugadores: eneágono
+    {{0, -1000}, {643, -766}, {985, -174}, {866, 500}, {342, 940}, {-342, 940}, {-866, 500}, {-985, -174}, {-643, -766}}
+};
+
+static int calculate_max_radius(int width, int height) {
+    int margin = 2;
+    int center_x = (width - 1) / 2;
+    int center_y = (height - 1) / 2;
+    
+    int max_radius_x = (center_x < width/2 - margin) ? center_x - margin : width/2 - margin;
+    int max_radius_y = (center_y < height/2 - margin) ? center_y - margin : height/2 - margin;
+    
+    int radius = (max_radius_x < max_radius_y) ? max_radius_x : max_radius_y;
+    
+    // Convertir a escala *1000 y ajustar para que no toque los bordes
+    return radius * 1000;
+}
+
+
+
+static void start_players(int width, int height) {
+    int player_count = state_ptr->player_count;
+    for (int i = 0; i < player_count; i++) {
+        state_ptr->players[i].score = 0;
+        state_ptr->players[i].invalid_move = 0;
+        state_ptr->players[i].valid_move = 0;
         
+        /*
         do {
             state_ptr->players[i].pos_x = rand() % state_ptr->width;
             state_ptr->players[i].pos_y = rand() % state_ptr->height;
-        } while (!is_position_unique(i));
+        } while (!is_position_unique(i));*/
 
-        state_ptr->board[state_ptr->players[i].pos_y * state_ptr->width + state_ptr->players[i].pos_x]=-i;
+        //state_ptr->board[state_ptr->players[i].pos_y * width + state_ptr->players[i].pos_x]=-i;
         
         state_ptr->players[i].pid = 0;
         state_ptr->players[i].blocked = false;
     }
+
+    // Centro de la cuadrícula (en coordenadas enteras)
+    int center_x = (width - 1) / 2;
+    int center_y = (height - 1) / 2;
+
+    int radius_scaled = calculate_max_radius(width, height);
+
+    for (int i = 0; i < player_count; i++) {
+        // Obtener offset desde la tabla (ya está en escala *1000)
+        int offset_x = POLYGON_OFFSETS[player_count][i][0];
+        int offset_y = POLYGON_OFFSETS[player_count][i][1];
+        
+        // Escalar el offset por el radio y dividir por 1000 para volver a escala normal
+        int scaled_offset_x = (offset_x * radius_scaled) / 1000000;  // Dividir por 1000*1000
+        int scaled_offset_y = (offset_y * radius_scaled) / 1000000;
+        
+        // Calcular posición final
+        state_ptr->players[i].pos_x = center_x + scaled_offset_x;
+        state_ptr->players[i].pos_y = center_y + scaled_offset_y;
+        
+        // Asegurar que no salga de los límites
+        if (state_ptr->players[i].pos_x < 0) state_ptr->players[i].pos_x = 0;
+        if (state_ptr->players[i].pos_x >= width) state_ptr->players[i].pos_x = width - 1;
+        if (state_ptr->players[i].pos_y < 0) state_ptr->players[i].pos_y = 0;
+        if (state_ptr->players[i].pos_y >= height) state_ptr->players[i].pos_y = height - 1;
+
+        state_ptr->board[state_ptr->players[i].pos_y * width + state_ptr->players[i].pos_x] = -i;
+    }
+    return;
 }
+    
 
 static void parse_player(gameState * config_args, const char *name){
-    memset(config_args->players[config_args->player_count].name, 0, MAX_LENGHT_NAME);
-    for (int i = 0; i < MAX_LENGHT_NAME-1 && name[i]!=0; i++){
+    memset(config_args->players[config_args->player_count].name, 0, MAX_LENGTH_NAME);
+    for (int i = 0; i < MAX_LENGTH_NAME-1 && name[i]!=0; i++){
         config_args->players[config_args->player_count].name[i]=name[i];
     }
-    config_args->players[config_args->player_count].name[MAX_LENGHT_NAME-1] = '\0';
+    config_args->players[config_args->player_count].name[MAX_LENGTH_NAME-1] = '\0';
     config_args->player_count++;
 }
 
@@ -71,7 +216,7 @@ gameState parse_arguments(int argc, char *argv[]) {
     };
 
     for (int i = 0; i < 9; i++) {
-        memset(config_args.players[i].name, 0, MAX_LENGHT_NAME);
+        memset(config_args.players[i].name, 0, MAX_LENGTH_NAME);
     }
 
     int opt;
@@ -130,7 +275,7 @@ gameState parse_arguments(int argc, char *argv[]) {
 }
 
 
-int create_game_state (gameState state){
+int create_game_state(gameState state){
     state_ptr = create_shm_state(state.width, state.height);
 
     if (state_ptr == NULL) {
@@ -142,7 +287,7 @@ int create_game_state (gameState state){
     state_ptr->player_count = state.player_count;
     state_ptr->game_ended = false;
     for (int i = 0; i < state.player_count; i++) {
-        memset(state_ptr->players[i].name, 0, MAX_LENGHT_NAME);
+        memset(state_ptr->players[i].name, 0, MAX_LENGTH_NAME);
         for (int j = 0; state.players[i].name[j]!=0; j++){
             state_ptr->players[i].name[j]=state.players[i].name[j];
         }
@@ -153,11 +298,11 @@ int create_game_state (gameState state){
             state_ptr->board[j+i*state_ptr->width] = (rand() % 9) + 1;
         }
     }
-    start_players();
+    start_players(state.width, state.height);
     return 0;
 }
 
-int create_sync (int player_count){
+int create_sync(int player_count){
     sync_ptr = create_shm_sync(player_count);
     if(sync_ptr == NULL){
         fprintf(stderr, "Error: cannot create shared memory for semaphores\n");
@@ -285,6 +430,12 @@ void game_management(int player_count, int fds[]){
     int maxfd, id_roundrobin=0;
 
     time_t last_valid_request = time(NULL);
+    
+    if (view!=NULL){
+        master_notify_view(sync_ptr);
+        master_wait_view(sync_ptr);
+        usleep(delay * 1000u);
+    }
 
     while (!state_ptr->game_ended) {
         time_t now = time(NULL);

@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -pthread
-LDFLAGS = -lrt
+LDFLAGS = -lrt -lm
 
 SRC_DIR = src
 BIN_DIR = bin

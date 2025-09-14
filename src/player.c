@@ -18,8 +18,7 @@ movement_info * movement_info_ptr;
 bool is_valid_move(int width, int height, unsigned short player_x, unsigned short player_y, int diff_x, int diff_y);
 int movement(int width, int height, int player_id);
 
-int movement(int width, int height, int player_id){ // basicamente agarra el puntaje mas alto nada mas
-    //player * p = &state_ptr->players[player_id];
+int movement(int width, int height, int player_id){
 
     int max = 0;
     char m = NMOVS;
