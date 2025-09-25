@@ -17,7 +17,10 @@ $(BIN_DIR)/view: $(SRC_DIR)/view.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | 
 $(BIN_DIR)/player: $(SRC_DIR)/player.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-all: $(BIN_DIR)/master $(BIN_DIR)/view $(BIN_DIR)/player
+$(BIN_DIR)/player2: $(SRC_DIR)/player2.c $(SRC_DIR)/common.h $(SRC_DIR)/ipc_utils.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
+all: $(BIN_DIR)/master $(BIN_DIR)/view $(BIN_DIR)/player $(BIN_DIR)/player2
 
 clean:
 	rm -rf $(BIN_DIR)

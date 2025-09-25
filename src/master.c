@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <poll.h>
 #include <sys/wait.h>
 #include <sys/select.h>
 
@@ -304,7 +305,103 @@ static void fork_players(int player_count, int pipes[][2], int fds[],
     }
 }
 
+static void game_management_with_poll(int player_count, int fds[]){
+    struct pollfd pfds[MAX_PLAYERS];
+    unsigned char move;
+    int id_roundrobin = 0;
 
+    time_t last_valid_request = time(NULL);
+    
+    if (view != NULL){
+        master_notify_view(sync_ptr);
+        master_wait_view(sync_ptr);
+        usleep(delay * 1000u);
+    }
+
+    while (!state_ptr->game_ended) {
+        time_t now = time(NULL);
+        if (difftime(now, last_valid_request) >= timeout) {
+            break;
+        }
+
+        int active_fds = 0;
+        for (int i = 0; i < player_count; i++) {
+            pfds[i].fd = fds[i];
+            if (fds[i] >= 0) {
+                pfds[i].events = POLLIN | POLLERR | POLLHUP;
+                active_fds++;
+            } else {
+                pfds[i].events = 0;
+            }
+            pfds[i].revents = 0;
+        }
+
+        if (active_fds == 0) {
+            break;
+        }
+
+        int ready = poll(pfds, player_count, 500);
+
+        if (ready < 0) {
+            perror("poll");
+            exit(EXIT_FAILURE);
+        } else if (ready > 0) {
+            for (int i = 0; i < player_count; i++, id_roundrobin = (id_roundrobin + 1) % player_count) {
+                if (fds[id_roundrobin] < 0) continue;
+                
+                short poll_rev = pfds[id_roundrobin].revents;
+                if (!poll_rev) continue;
+
+                if (poll_rev & POLLNVAL) {
+                    state_ptr->players[id_roundrobin].blocked = true;
+                    close(fds[id_roundrobin]);
+                    fds[id_roundrobin] = -1;
+                    master_release_player(sync_ptr, id_roundrobin);
+                    continue;
+                }
+
+                if (poll_rev & POLLIN) {
+                    int n = read(fds[id_roundrobin], &move, 1);
+                    if (n <= 0) {
+                        state_ptr->players[id_roundrobin].blocked = true;
+                        close(fds[id_roundrobin]);
+                        fds[id_roundrobin] = -1;
+                    } else {
+                        lock_writer(sync_ptr);
+
+                        if (is_valid_movement(move, id_roundrobin)) {
+                            apply_movement(move, id_roundrobin);
+                            state_ptr->players[id_roundrobin].valid_move++;
+                            last_valid_request = time(NULL);
+                            
+                            if (view != NULL) {
+                                master_notify_view(sync_ptr);
+                                master_wait_view(sync_ptr);
+                                usleep(delay * 1000u);
+                            }
+                        } else {
+                            state_ptr->players[id_roundrobin].invalid_move++;
+                        }
+
+                        unlock_writer(sync_ptr);
+                    }
+                    master_release_player(sync_ptr, id_roundrobin);
+                    continue;
+                }
+
+                if (poll_rev & (POLLHUP | POLLERR)) {
+                    state_ptr->players[id_roundrobin].blocked = true;
+                    close(fds[id_roundrobin]);
+                    fds[id_roundrobin] = -1;
+                    master_release_player(sync_ptr, id_roundrobin);
+                    continue;
+                }
+            }
+        }
+    }
+}
+
+/*
 static void game_management(int player_count, int fds[]){
     fd_set readfds;
     unsigned char move;
@@ -380,7 +477,7 @@ static void game_management(int player_count, int fds[]){
             }
         }
     }
-}
+}*/
 
 int main(int argc, char *argv[]) {
     (void)write(STDOUT_FILENO, "\033[H\033[2J\033[3J", 12);
@@ -421,12 +518,13 @@ int main(int argc, char *argv[]) {
     }
    
     int player_count = state_ptr->player_count;
-    int pipes[player_count][2];
-    int fds[player_count];
+    int pipes[MAX_PLAYERS][2];
+    int fds[MAX_PLAYERS];
 
     fork_players(player_count, pipes, fds, arg_w, arg_h);
 
-    game_management(player_count, fds);
+    //game_management(player_count, fds);
+    game_management_with_poll(player_count, fds);
 
     state_ptr->game_ended = true;
     for (int i = 0; i < player_count; i++){
