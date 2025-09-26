@@ -321,6 +321,12 @@ static void game_management_with_poll(int player_count, int fds[]){
     while (!state_ptr->game_ended) {
         time_t now = time(NULL);
         if (difftime(now, last_valid_request) >= timeout) {
+            for (int i = 0; i < player_count; i++) {
+                if (fds[i] >= 0) {
+                    close(fds[i]);
+                    fds[i] = -1;
+                }
+            }
             break;
         }
 
@@ -402,7 +408,7 @@ static void game_management_with_poll(int player_count, int fds[]){
 }
 
 /*
-static void game_management(int player_count, int fds[]){
+static void game_management_with_select(int player_count, int fds[]){
     fd_set readfds;
     unsigned char move;
     int maxfd, id_roundrobin=0;
@@ -523,7 +529,7 @@ int main(int argc, char *argv[]) {
 
     fork_players(player_count, pipes, fds, arg_w, arg_h);
 
-    //game_management(player_count, fds);
+    //game_management_with_select(player_count, fds);
     game_management_with_poll(player_count, fds);
 
     state_ptr->game_ended = true;

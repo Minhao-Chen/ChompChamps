@@ -106,6 +106,7 @@ int main(int argc, char *argv[]) {
         
         if (state_ptr->game_ended) {
             unlock_reader(sync_ptr);
+            close(STDOUT_FILENO);
             break;
         }
  
